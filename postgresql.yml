@@ -1,0 +1,33 @@
+---
+- name: PostgreSQL install and setup
+  hosts: all
+  become: true
+  vars:
+    - pg_user: "postgre"
+    - pg_password: "postgre"
+    - pg_db: "db"
+
+  tasks:
+    - name: install necessary package
+      apt: name={{item}} state=present update_cache=yes
+      with_items:
+       - postgresql=9.5*
+       - libpq-dev
+       - python-psycopg2  # depend by ansible tasks
+
+
+    - name: create postgres user
+      become_user: postgres
+      postgresql_user:
+        name: '{{pg_user}}'
+        password: '{{pg_password}}'
+        encrypted: true
+
+
+    - name: create postgres database
+      become_user: postgres
+      postgresql_db:
+        name: '{{pg_db}}'
+        owner: '{{pg_user}}'
+
+

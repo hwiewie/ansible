@@ -1,0 +1,45 @@
+---
+- name: system setup
+  hosts: all
+  become: yes
+  gather_facts: False
+  pre_tasks:
+    - name: Install python for Ansible
+      raw: test -e /usr/bin/python || (apt-get -y update && apt-get install -y python-minimal)
+      changed_when: False
+    - setup: # aka gather_facts
+  tasks:
+    - name: Install base packages
+      apt: name={{ item }} state=present
+      with_items:
+        - python-pip
+        - python-dev
+        - build-essential
+        - python3-dev
+        - python3-pip
+        - libpcre3
+        - libpcre3-dev
+        - libpq-dev
+        - debhelper
+      tags:
+        - packages
+
+    - name: Upgrade pip
+      pip: name={{ item }} state=latest
+      with_items:
+        - pip
+        - virtualenv
+      tags:
+        - packages
+
+    - name: Install node packages
+      apt: name={{ item }} state=present
+      with_items:
+        - nodejs
+        - npm
+      tags:
+        - packages
+
+    - name: create link with nodejs to node
+      command: ln -s /usr/bin/nodejs /usr/bin/node
+

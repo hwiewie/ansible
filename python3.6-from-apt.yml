@@ -1,0 +1,26 @@
+---
+- name: Install Python3.6
+  hosts: all
+  become: yes
+  tasks:
+  - name: Check that the /usr/local/bin/python3.6 exists
+    stat:
+      path: /usr/local/bin/python3.6
+    tags: python
+    register: python_result
+
+
+  - name: Install prerequisites
+    apt: name={{item}} update_cache=yes
+    with_items:
+      - software-properties-common
+
+  - name: Add Python3.6 APT repository
+    apt_repository:
+      repo: ppa:deadsnakes/ppa
+
+  - name: Install Python3.6
+    apt: name={{item}} state=present update_cache=yes
+    with_items:
+      - python3.6
+      - python3.6-dev

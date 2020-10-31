@@ -1,0 +1,57 @@
+---
+- name: Install Python3.6 from source
+  hosts: all
+  become: yes
+  tasks:
+  - name: Check that the /usr/local/bin/python3.6 exists
+    stat:
+      path: /usr/local/bin/python3.6
+    tags: python
+    register: python_result
+  - name: Update apt-cache
+    apt: update_cache=yes
+    tags: packages, python
+    when: python_result.stat.exists == False
+  - name: Install packages needed for installing Python
+    apt: pkg={{ item }}
+    with_items:
+      - wget
+      - xz-utils
+      - build-essential
+      - libsqlite3-dev
+      - libreadline-dev
+      - libssl-dev
+      - openssl
+    tags: packages, python
+    when: python_result.stat.exists == False
+  - name: Extract python 3.6.4 into /tmp
+    unarchive:
+      src: https://www.python.org/ftp/python/3.6.4/Python-3.6.4.tar.xz
+      dest: /tmp/
+      remote_src: yes
+    tags: packages, python
+
+  - name: Configure python 3.6.4
+    shell: ./configure chdir=/tmp/Python-3.6.4
+    tags: packages, python
+    when: python_result.stat.exists == False
+
+  - name: Make
+    shell: make chdir=/tmp/Python-3.6.4
+    tags: packages, python
+    when: python_result.stat.exists == False
+
+  - name: Install Python 3.6.4
+    shell: make install chdir=/tmp/Python-3.6.4
+    become: yes
+    become_user: root
+    tags: packages, python
+    when: python_result.stat.exists == False
+
+  - name: Remove tmp files used for Python 3.6.4 installation
+    file: path={{ item }} state=absent
+    with_items:
+      - /tmp/Python.tar.xz
+      - /tmp/Python-3.6.4
+    tags: packages, python
+    when: python_result.stat.exists == False
