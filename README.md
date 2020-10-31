@@ -35,3 +35,5 @@ git@github.com:splunk/splunk-ansible.git
 
 git@github.com:gchq/stroom-ansible.git
 
+git@github.com:flathub/ansible-playbook.git
+
