@@ -1,0 +1,90 @@
+Ansible-hublin : Quickly deploy hubl.in slave
+=============================================
+
+Why do you need this ?!
+-----------------------
+
+With this project, you can deploy a fully-fonctionnal distributed (or not) hublin infrastructure.
+
+You can deploy it to make tests on your computer using, for example, virtualbox vms, or you can use it to add hublin slaves in production using hubl.in as a master server.
+
+Be carefull however, hubl.in asn't yet been configured to be compatible with this project.
+
+Prepare your deployment
+-----------------------
+
+Before deploying anything, make sure you have access to root account of all the hosts you need to deploy via ssh.
+
+Also, you need to put hostnames in inventory so if your hosts aren't registered in a DNS server, you need to add them in your /etc/hosts file.
+
+The first thing you need to do before deploying is to configure your deployment using config.yml file.
+
+The file can be used as it because it provides default values for all variables that are valid in most cases.
+
+All the configuration options are documented in the file so they must be easy to understand.
+
+If you need to override a variable only for one host, you can use a file in host_vars directory.
+
+The file must be named the hostname of the concerned host.
+
+Notice about certificates
+-------------------------
+
+Certificates you set in conf file must be placed in certs directory before launch your deployment.
+
+Remote slaves deployment
+------------------------
+
+Edit inventory file and place all remote hostnames into hublin-slave group like below :
+
+```.bash
+[hublin-slave]
+hubl2.in
+hubl3.in
+```
+
+Run the following command to start deployment :
+
+```.bash
+ansible-playbook -i inventory hublin.yml
+```
+
+You must have ssh root access to the remote host.
+
+Local slave deployment
+----------------------
+
+Edit inventory file and place localhost into hublin-slave-local group like below :
+
+```.ini
+[hublin-slave-local]
+localhost
+```
+
+Run the following command to start deployment :
+
+```.bash
+ansible-playbook -i inventory hublin.yml
+```
+
+Hubl.in master server deployment
+--------------------------------
+
+Edit inventory file and place localhost into hublin-slave-local group like below :
+
+```.ini
+[hublin-master]
+hubl.in
+```
+Run the following command to start deployment :
+
+```.bash
+ansible-playbook -i inventory hublin.yml
+```
+
+Full infrastructure
+-------------------
+
+Put all kind of hosts in your inventory and run the command above.
+
+More to come ...

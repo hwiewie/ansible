@@ -1,0 +1,4 @@
+---
+- name: Restart hublin service
+  service: name=hublin state=restarted enabled=true
+  tags: hublin
