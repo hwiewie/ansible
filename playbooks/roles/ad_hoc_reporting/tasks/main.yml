@@ -1,0 +1,190 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+# Creates scripts and users to enable ad-hoc reporting using MySQL
+# read replicas and MongoDB secondary nodes.
+#
+# Overview:
+# Creates users and scripts for ad-hoc reporting environments from your
+# ansible var files.  You would run this role as follows
+#
+# ansible-playbook -i 'reporting.example.com,' ./ad_hoc_reporting.yml -e@/var/path/common_vars.yml -e@/vars/path/environnment-deployment.yml
+#
+# Dependencies:
+#   - aws
+#   - user
+
+- name: install system packages
+  apt:
+    name: "{{ ad_hoc_reporting_debian_pkgs }}"
+    state: present
+  tags:
+    - install:system-requirements
+
+- name: add the mongodb signing key
+  apt_key:
+    id: "{{ MONGODB_APT_KEY }}"
+    keyserver: "{{ MONGODB_APT_KEYSERVER }}"
+    state: present
+  retries: 3
+  tags:
+    - install:system-requirements
+
+- name: add the mongodb repo to the sources list
+  apt_repository:
+    repo: "{{ MONGODB_REPO }}"
+    state: present
+  tags:
+    - install:system-requirements
+
+- name: install mongo shell
+  apt:
+    name: mongodb-org-shell={{ MONGO_VERSION }}
+    state: present
+    install_recommends: yes
+    force: yes
+    update_cache: yes
+  tags:
+    - install:system-requirements
+
+- name: install mongo shell
+  apt:
+    name: mongodb-org-tools={{ MONGO_VERSION }}
+    state: present
+    install_recommends: yes
+    force: yes
+    update_cache: yes
+  tags:
+    - install:system-requirements
+
+- name: install python packages
+  pip:
+    name: "{{ ad_hoc_reporting_pip_pkgs }}"
+    state: present
+    extra_args: "-i {{ COMMON_PYPI_MIRROR_URL }}"
+  tags:
+    - install:app-requirements
+
+- name: create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: 0755
+  with_items:
+    - /edx/bin
+  tags:
+    - scripts
+    - install:base
+
+- name: Get the AWS rds ca certificate to connect db using SSL
+  shell: "curl {{ aws_rds_ca_cert_key_url }} -o rds-combined-ca-bundle.pem"
+  args:
+    chdir: /edx/bin
+  when: AWS_RDS_IAM_AUTHENTICATION
+  tags:
+    - scripts
+    - install:base
+
+#These templates rely on there being a global
+# read_only mysql user, you must override the default
+# in order for these templates to be written out.
+#Also, all of the *_REPLICA_DB_HOST vars are only defined
+# in secure config files.
+- name: install common mysql replica scripts
+  template:
+    src: edx/bin/mysql.sh.j2
+    dest: /edx/bin/{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}-{{ item.script_name }}
+    mode: 0755
+    owner: root
+    group: root
+  when: COMMON_MYSQL_READ_ONLY_PASS is defined and item.depends_on and not AWS_RDS_IAM_AUTHENTICATION
+  tags:
+    - scripts
+    - scripts:mysql
+    - install:code
+  with_items: "{{ AD_HOC_REPORTING_REPLICA_DB_HOSTS }}"
+
+- name: install common rds iam replica scripts
+  template:
+    src: edx/bin/rds-iam.sh.j2
+    dest: /edx/bin/{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}-{{ item.script_name }}
+    mode: 0755
+    owner: root
+    group: root
+  when: item.db_host|length>0 and AWS_RDS_IAM_AUTHENTICATION
+  tags:
+    - scripts
+    - scripts:mysql
+    - install:code
+  with_items: "{{ AD_HOC_REPORTING_REPLICA_DB_HOSTS }}"
+
+# These templates rely on there being a global
+# read_only mongo user, you must override the default
+# in order for these templates to be written out
+- name: install read_only user mongodb replica scripts
+  template:
+    src: edx/bin/mongo.sh.j2
+    dest: /edx/bin/{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}-{{ item.script_name }}
+    mode: 0755
+    owner: root
+    group: root
+  with_items:
+    - db_hosts: "{{ EDXAPP_MONGO_HOSTS }}"
+      db_name: "{{ EDXAPP_MONGO_DB_NAME }}"
+      db_port: "{{ EDXAPP_MONGO_PORT }}"
+      script_name: edxapp-mongo.sh
+      read_only_access: "{{ EDXAPP_MONGO_READ_ONLY_ACCESS  }}"
+    - db_hosts: "{{ FORUM_MONGO_HOSTS_FOR_AD_HOC_REPORTING }}"
+      db_name: "{{ FORUM_MONGO_DATABASE }}"
+      db_port: "{{ FORUM_MONGO_PORT }}"
+      script_name: forum-mongo.sh
+      read_only_access: "{{ FORUM_MONGO_READ_ONLY_ACCESS  }}"
+  when: COMMON_MONGO_READ_ONLY_PASS is defined and item.read_only_access
+  tags:
+    - scripts
+    - scripts:mongo
+    - install:code
+
+- name: install single user access mongodb replica scripts
+  template:
+    src: edx/bin/mongo-user-auth.sh.j2
+    dest: /edx/bin/{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}-{{ item.script_name }}
+    mode: 0755
+    owner: root
+    group: root
+  with_items:
+    - db_hosts: "{{ EDXAPP_MONGO_HOSTS }}"
+      db_name: "{{ EDXAPP_MONGO_DB_NAME }}"
+      db_port: "{{ EDXAPP_MONGO_PORT }}"
+      script_name: edxapp-mongo-user-auth.sh
+      read_only_access: "{{ EDXAPP_MONGO_READ_ONLY_ACCESS  }}"
+    - db_hosts: "{{ FORUM_MONGO_HOSTS_FOR_AD_HOC_REPORTING }}"
+      db_name: "{{ FORUM_MONGO_DATABASE }}"
+      db_port: "{{ FORUM_MONGO_PORT }}"
+      script_name: forum-mongo-user-auth.sh
+      read_only_access: "{{ FORUM_MONGO_READ_ONLY_ACCESS  }}"
+  when: not item.read_only_access
+  tags:
+    - scripts
+    - scripts:mongo
+    - install:code
+
+- name: install a global mongorc.js
+  template:
+    src: etc/mongorc.js.j2
+    dest: /etc/mongorc.js
+    mode: 0755
+    owner: root
+    group: root
+  tags:
+    - scripts
+    - scripts:mongo
+    - mongorc

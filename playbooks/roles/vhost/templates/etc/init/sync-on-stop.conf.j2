@@ -1,0 +1,5 @@
+start on stopped supervisor
+description     "sync tracking logs on supervisor shutdown"
+script
+        "{{ COMMON_OBJECT_STORE_LOG_SYNC_ON_EXIT }}"
+end script

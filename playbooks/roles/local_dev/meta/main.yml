@@ -1,0 +1,4 @@
+---
+dependencies:
+  - role: jscover
+    JSCOVER_VERSION: "{{ LOCALDEV_JSCOVER_VERSION }}"
