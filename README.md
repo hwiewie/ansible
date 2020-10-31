@@ -1,8 +1,12 @@
 指令：
 git add .
+
 git commit -m "first commit"
+
 git pull origin master
+
 git push -u origin master
+
 
 git@github.com:hwiewie/ansible.git
 
