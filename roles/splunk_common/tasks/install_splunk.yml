@@ -1,0 +1,40 @@
+---
+- name: Remove old manifest files
+  file:
+    path: "{{ item.path }}"
+    state: "absent"
+  ignore_errors: yes
+  become: yes
+  become_user: "{{ privileged_user }}"
+  with_items:
+  - "{{ manifests.files }}"
+  when: splunk_upgrade | bool
+
+- name: Remove old directories
+  file:
+    path: "{{ item }}"
+    state: "absent"
+  ignore_errors: yes
+  become: yes
+  become_user: "{{ privileged_user }}"
+  with_items:
+    - "{{ splunk.home }}/bin"
+    - "{{ splunk.home }}/lib"
+    - "{{ splunk.home }}/share"
+    - "{{ splunk.home }}/Python-2.7"
+  when: splunk_upgrade | bool
+
+- name: Install Splunk
+  include_tasks: install_splunk_{{ splunk_build_type }}.yml
+
+- name: Remove installers
+  file:
+    dest: "{{ item }}"
+    state: "absent"
+  ignore_errors: yes
+  become: yes
+  become_user: "{{ privileged_user }}"
+  with_items:
+    - "{{ splunk.build_location }}"
+    - "/tmp/splunk.msi"
+    - splunk_downloaded_build_location

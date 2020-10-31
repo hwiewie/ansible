@@ -75,6 +75,10 @@ instance/
 # Sphinx documentation
 docs/_build/
 
+# Notepad++ backups #
+*.bak
+.ropeproject/
+
 # PyBuilder
 target/
 
@@ -83,6 +87,15 @@ target/
 
 # pyenv
 .python-version
+
+# exclude python byte code
+*.pyc
+*.idea
+*.pyo
+_book
+*.retry
+test*.xml
+**/.DS_Store
 
 # celery beat schedule file
 celerybeat-schedule
@@ -111,3 +124,19 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# visual studio
+.vscode
+
+# Vim temp files, etc
+[._]*.s[a-w][a-z]
+[._]s[a-w][a-z]
+*.un~
+Session.vim
+.netrwhist
+*~
+#vim pymode
+.ropeproject
+
+# version
+version.txt

@@ -1,0 +1,85 @@
+---
+- include_tasks: ../../../roles/splunk_common/tasks/wait_for_splunk_instance.yml
+  vars:
+    splunk_instance_address: "{{ splunk.deployer_url }}"
+
+- name: Initialize SHC cluster config
+  command: "{{ splunk.exec }} init shcluster-config -auth '{{ splunk.admin_user }}:{{ splunk.password }}' -mgmt_uri '{{ cert_prefix }}://{{ splunk.hostname }}:{{ splunk.svc_port }}' -replication_port {{ splunk.shc.replication_port }} -replication_factor {{ splunk.shc.replication_factor }} -conf_deploy_fetch_url '{{ cert_prefix }}://{{ splunk.deployer_url }}:{{ splunk.svc_port }}' -secret '{{ splunk.shc.pass4SymmKey }}' -shcluster_label '{{ splunk.shc.label }}'"
+  become: yes
+  become_user: "{{ splunk.user }}"
+  register: task_result
+  changed_when: task_result.rc == 0
+  until: task_result.rc == 0
+  retries: "{{ retry_num }}"
+  delay: "{{ retry_delay }}"
+  notify:
+    - Restart the splunkd service
+  no_log: "{{ hide_password }}"
+
+- name: Set desired preferred captaincy
+  uri:
+    url: "{{ cert_prefix }}://127.0.0.1:{{ splunk.svc_port }}/servicesNS/nobody/system/configs/conf-server/shclustering"
+    method: POST
+    user: "{{ splunk.admin_user }}"
+    password: "{{ splunk.password }}"
+    validate_certs: false
+    body:
+      preferred_captain: "{{ splunk_search_head_captain | bool | lower }}"
+    body_format: "form-urlencoded"
+    timeout: 10
+    use_proxy: no
+  notify:
+    - Restart the splunkd service
+  no_log: "{{ hide_password }}"
+  when:
+    - splunk_search_head_captain is defined and splunk.preferred_captaincy | bool
+
+- name: Flush restart handlers
+  meta: flush_handlers
+
+- include_tasks: ../../../roles/splunk_common/tasks/wait_for_splunk_process.yml
+
+- include_tasks: ../../../roles/splunk_common/tasks/wait_for_splunk_instance.yml
+  vars:
+    splunk_instance_address: "{{ splunk.deployer_url }}"
+
+- name: Boostrap SHC captain
+  command: "{{ splunk.exec }} bootstrap shcluster-captain -servers_list '{% for host in groups['splunk_search_head'] %}{{ cert_prefix }}://{{ host }}:{{ splunk.svc_port }}{% if not loop.last %},{% endif %}{% endfor %}' -auth '{{ splunk.admin_user }}:{{ splunk.password }}'"
+  become: yes
+  become_user: "{{ splunk.user }}"
+  when: splunk_search_head_captain | bool
+  register: task_result
+  until: task_result.rc == 0 or "node seems to have already joined another cluster" in task_result.stderr
+  changed_when: task_result.rc == 0
+  failed_when: task_result.rc !=0 and "node seems to have already joined another cluster" not in task_result.stderr
+  retries: "{{ retry_num }}"
+  delay: "{{ retry_delay }}"
+  notify:
+    - Restart the splunkd service
+  no_log: "{{ hide_password }}"
+
+- name: Add new member to SHC
+  command: "{{ splunk.exec }} add shcluster-member -current_member_uri {{ cert_prefix }}://{{ splunk.search_head_captain_url }}:{{ splunk.svc_port }} -auth {{ splunk.admin_user }}:{{ splunk.password }}"
+  become: yes
+  become_user: "{{ splunk.user }}"
+  when: not splunk_search_head_captain | bool
+  register: task_result
+  changed_when: task_result.rc == 0
+  failed_when: task_result.rc !=0 and "is already part of cluster" not in task_result.stderr
+  until: task_result.rc == 0 or "is already part of cluster" in task_result.stderr
+  retries: "{{ shc_sync_retry_num }}"
+  delay: "{{ retry_delay }}"
+  no_log: "{{ hide_password }}"
+
+- name: Destructive sync search head
+  command: "{{ splunk.exec }} resync shcluster-replicated-config -auth {{ splunk.admin_user }}:{{ splunk.password }}"
+  become: yes
+  become_user: "{{ splunk.user }}"
+  when: not splunk_search_head_captain | bool
+  register: task_result
+  changed_when: task_result.rc == 0
+  failed_when: task_result.rc !=0 and "this instance is the captain" not in task_result.stderr
+  until: task_result.rc == 0 or "this instance is the captain" in task_result.stderr
+  retries: "{{ shc_sync_retry_num }}"
+  delay: "{{ retry_delay }}"
+  no_log: "{{ hide_password }}"

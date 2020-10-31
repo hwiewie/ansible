@@ -1,0 +1,14 @@
+---
+- name: Pre-scaleup checks
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  tasks:
+  - import_role:
+      name: openshift_node
+      tasks_from: scaleup_checks.yml
+
+- name: install nodes
+  hosts: new_workers
+  roles:
+  - openshift_node

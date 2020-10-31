@@ -1,0 +1,26 @@
+---
+
+# Run with ansible-playbook -i vagrant_hosts.cfg vagrant_playbook.yml
+- hosts: vagrant
+  become: yes
+  become_method: sudo
+  gather_facts: yes
+  pre_tasks:
+    - include: senaite_pre_tasks.yml
+    # Include overwrite variables
+    - name: Include variables defined in `vagrant_configure.yml`
+      include_vars: vagrant_configure.yml
+      tags:
+        - always
+
+  tasks:
+    - include: senaite_base.yml
+    - include: senaite_plone.yml
+    - include: senaite_haproxy.yml
+    - include: senaite_nginx.yml
+    - include: senaite_munin.yml
+    - include: senaite_postfix.yml
+    - include: senaite_security.yml
+
+  handlers:
+    - include: senaite_handlers.yml

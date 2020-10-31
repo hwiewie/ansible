@@ -1,0 +1,63 @@
+{% for vhost in custom_vhosts %}
+# HTTP VHOST: {{ vhost }}
+server {
+    listen 80;
+    server_name {{ vhost }};
+
+    rewrite ^(.*)(/login_|/require_login|/failsafe_login_form|/logged_in)(.*)(=http)(?!s)(.*) $1$2$3$4s$5 last;
+    if ($http_cookie ~* "__ac=([^;]+)(?:;|$)" ) {
+        rewrite ^(.*) https://$host$1 redirect;
+    }
+
+    location / {
+        set $backend http://haproxy;
+        if ($uri ~* "@@API") {
+            set $backend http://api;
+        }
+        proxy_set_header        Host            $http_host;
+        proxy_set_header        X-Real-IP       $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        rewrite                 ^(.*)$ /VirtualHostBase/$scheme/$host/{{ plone_site_id }}/VirtualHostRoot/$1 break;
+        proxy_pass              $backend;
+    }
+}
+
+# HTTPS VHOST: {{ vhost }}
+server {
+    listen 443 ssl;
+    server_name {{ vhost }};
+
+    ssl_certificate {{ ssl_certificate }};
+    ssl_certificate_key {{ ssl_certificate_key }};
+
+    ssl_session_timeout 10m;
+    ssl_protocols SSLv3 TLSv1;
+    ssl_ciphers ALL:!ADH:!EXPORT56:RC4+RSA:+HIGH:+MEDIUM:+LOW:+SSLv3:+EXP;
+    ssl_prefer_server_ciphers on;
+
+    # Allow Cross-Origin Resource Sharing from our HTTP domain
+    add_header "Access-Control-Allow-Origin" "http://{{ vhost }}";
+    add_header "Access-Control-Allow-Credentials" "true";
+    add_header "Access-Control-Allow-Methods" "GET, POST, OPTIONS";
+
+    if ($http_cookie ~* "__ac=([^;]+)(?:;|$)" ) {
+        # prevent infinite recursions between http and https
+        break;
+    }
+    rewrite ^(.*)(/logged_out)(.*) http://$server_name$1$2$3 redirect;
+
+    location / {
+        set $backend http://haproxy;
+        # API calls take a different backend w/o caching
+        if ($uri ~* "@@API") {
+            set $backend http://api;
+        }
+        proxy_set_header        Host            $http_host;
+        proxy_set_header        X-Real-IP       $remote_addr;
+        proxy_set_header        X-Forwarded-For $proxy_add_x_forwarded_for;
+        rewrite                 ^(.*)$ /VirtualHostBase/$scheme/$host/{{ plone_site_id }}/VirtualHostRoot/$1 break;
+        proxy_pass              $backend;
+    }
+
+}
+{% endfor %}

@@ -1,0 +1,15 @@
+---
+- include_tasks: ../../../roles/splunk_common/tasks/find_installed_apps.yml
+
+- include_tasks: generate_ess_bundle.yml
+  when:
+    - '"SplunkEnterpriseSecuritySuite" in installed_apps'
+
+- include_tasks: generate_itsi_bundle.yml
+  when:
+    - '"itsi" in installed_apps'
+
+- include_tasks: ../../../roles/splunk_common/tasks/copy_installed_apps.yml
+  vars:
+    apps: "{{ installed_apps }}"
+    dest: "{{ splunk.app_paths.idxc }}"

@@ -1,0 +1,72 @@
+---
+# TODO: Maybe we can make this a REST call?
+- name: Set deployer SHC key and label
+  ini_file:
+    dest: "{{ splunk.home }}/etc/system/local/server.conf"
+    section: shclustering
+    option: "{{ item.opt }}"
+    value: "{{ item.val }}"
+    mode: 0644
+  with_items:
+    - { opt: 'pass4SymmKey', val: '{{ splunk.shc.pass4SymmKey }}' }
+    - { opt: 'shcluster_label', val: '{{ splunk.shc.label }}' }
+  loop_control:
+    label: "{{ item.opt }}"
+  become: yes
+  become_user: "{{ splunk.user }}"
+  no_log: "{{ hide_password }}"
+  notify:
+    - Restart the splunkd service
+
+# https://docs.splunk.com/Documentation/Splunk/latest/DistSearch/PropagateSHCconfigurationchanges#Set_the_deployer_push_mode
+- name: Set deployer push mode
+  uri:
+    url: "{{ cert_prefix }}://127.0.0.1:{{ splunk.svc_port }}/servicesNS/nobody/system/configs/conf-app/shclustering"
+    method: POST
+    user: "{{ splunk.admin_user }}"
+    password: "{{ splunk.password }}"
+    validate_certs: false
+    body:
+      deployer_push_mode: "{{ splunk.shc.deployer_push_mode }}"
+    body_format: "form-urlencoded"
+    status_code: 200
+    timeout: 10
+    use_proxy: no
+  when: "'deployer_push_mode' in splunk.shc and splunk.shc.deployer_push_mode"
+  no_log: "{{ hide_password }}"
+
+- name: Flush restart handlers
+  meta: flush_handlers
+
+- name: Wait for SHC to be ready
+  shc_ready:
+    captain_url="{{ splunk.search_head_captain_url }}"
+    shc_peers="{{ groups['splunk_search_head'] }}"
+    spl_user="{{ splunk.admin_user }}"
+    spl_pass="{{ splunk.password }}"
+  no_log: "{{ hide_password }}"
+  register: task_result
+  until: task_result.rc == 0
+  retries: "{{ shc_sync_retry_num }}"
+  delay: "{{ retry_delay }}"
+  when:
+    - splunk_search_head_cluster | bool
+    - splunk.apps_location
+
+- include_tasks: ../../../roles/splunk_common/tasks/provision_apps.yml
+  when:
+    - splunk.apps_location
+    - splunk.deployment_server is not defined or not splunk.deployment_server
+
+- include_tasks: ../../../roles/splunk_common/tasks/set_as_deployment_client.yml
+  when: splunk.deployment_server is defined and splunk.deployment_server
+
+- include_tasks: push_apps_to_search_heads.yml
+  when:
+    - splunk.apps_location
+
+- include_tasks: ../../../roles/splunk_common/tasks/disable_installed_apps.yml
+  when:
+    - splunk.apps_location
+
+- include_tasks: ../../../roles/splunk_common/tasks/check_for_required_restarts.yml

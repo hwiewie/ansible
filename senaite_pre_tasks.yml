@@ -1,0 +1,71 @@
+---
+
+- debug:
+    msg: "******************** SENAITE PRE-TASKS [START] ********************"
+
+# REQUIRED SENAITE VARIABLES
+- name: Include SENAITE configure variables `senaite_configure.yml`
+  include_vars: senaite_configure.yml
+  tags:
+    - always
+
+- name: Installed Ansible Version
+  debug:
+    msg: "Current installed Ansible version: {{ ansible_version.string }}"
+  tags:
+    - always
+    - version
+
+- name: Fail if Ansible version is too old
+  fail: msg="Ansible version >= 2.9.0 required, please update!"
+  when: ansible_version.full < "2.9.0"
+  tags:
+    - always
+    - version
+
+- name: Setting variables for -> {{ ansible_distribution }}
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "vars/{{ ansible_distribution }}.yml"
+  tags:
+    - senaite-base
+
+- name: Update APT package cache
+  action: apt update_cache=yes
+  when: apt_do_upgrade_now == 1
+  tags:
+    - senaite-base
+
+- name: Upgrade APT to the lastest packages
+  action: apt upgrade=full
+#  notify: reboot
+  when: apt_do_upgrade_now == 1
+  tags:
+    - senaite-base
+
+- name: Install packages for -> {{ ansible_distribution }}
+  apt:
+    pkg: "{{ apt_packages }}"
+    state: present
+  tags:
+    - senaite-base
+
+- name: Install unattended-upgrades
+  apt: state=present pkg=unattended-upgrades
+#  notify: reboot
+  when: apt_unattended_upgrade == 1
+  tags:
+    - senaite-base
+
+- name: Adjust APT update intervals
+  template:
+    src: 10periodic.j2
+    dest: /etc/apt/apt.conf.d/10periodic
+    owner: root
+    group: root
+    mode: 0644
+  tags:
+    - senaite-base
+
+- debug:
+    msg: "******************** SENAITE PRE-TASKS [DONE] ********************"

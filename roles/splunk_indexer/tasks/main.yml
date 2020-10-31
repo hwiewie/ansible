@@ -1,0 +1,24 @@
+---
+- include_tasks: ../../../roles/splunk_common/tasks/set_as_hec_receiver.yml
+
+- include_tasks: indexer_clustering.yml
+  when: splunk_indexer_cluster | bool
+
+- include_tasks: ../../../roles/splunk_common/tasks/set_as_deployment_client.yml
+  when:
+    - splunk.deployment_server is defined
+    - splunk.deployment_server
+    - not splunk_indexer_cluster | bool
+
+- include_tasks: ../../../roles/splunk_common/tasks/provision_apps.yml
+  when:
+    - splunk.apps_location
+    - not splunk_indexer_cluster | bool
+    - splunk.deployment_server is not defined or not splunk.deployment_server
+
+- include_tasks: setup_multisite.yml
+  when:
+      - splunk.site is defined
+      - splunk.multisite_master is defined
+
+- include_tasks: ../../../roles/splunk_common/tasks/check_for_required_restarts.yml

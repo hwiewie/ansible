@@ -1,0 +1,18 @@
+---
+
+plone_initial_password: "admin"
+munin_admin_user: "admin"
+munin_admin_password: "admin"
+haproxy_stats_user: "admin"
+haproxy_stats_pass: "admin"
+supervisor_http_user: "admin"
+supervisor_http_pass: "admin"
+firewall_open_tcp_ports: [22, 25, 80, 443]
+nginx_keepalive_timeout: "300"
+plone_zodb_cache_size: 50000
+plone_additional_versions:
+  - zc.buildout=2.12.2
+  - setuptools=
+plone_client_count: 2
+plone_client_extras: |
+  python-check-interval = 2000

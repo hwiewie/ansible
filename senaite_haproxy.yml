@@ -1,0 +1,46 @@
+---
+
+- debug:
+    msg: "******************** SENAITE HA-PROXY [START] ********************"
+
+- include_role:
+    name: geerlingguy.haproxy
+
+- name: SHELL | Get HAPROXY Version
+  shell: haproxy -v | grep -o "[0-9]\.[0-9]" | head -1
+  register: haproxy_version
+  tags:
+    - senaite-haproxy-version
+
+- debug:
+    msg: "HAProxy Version is < 1.6 -> {{ haproxy_version.stdout }}"
+  when: haproxy_version.stdout|float < 1.6
+  tags:
+    - senaite-haproxy-version
+
+- debug:
+    msg: "HAProxy Version is > 1.6 -> {{ haproxy_version.stdout }}"
+  when: haproxy_version.stdout|float >= 1.6
+  tags:
+    - senaite-haproxy-version
+
+- name: Copy Bika HAProxy for versions < 1.6
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: 0644
+  notify: restart haproxy
+  when: haproxy_version.stdout|float < 1.6
+  tags: bika-haproxy
+
+- name: Copy Bika HAProxy for versions >= 1.6
+  template:
+    src: haproxy-1.6.x.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: 0644
+  notify: restart haproxy
+  when: haproxy_version.stdout|float >= 1.6
+  tags: bika-haproxy
+
+- debug:
+    msg: "******************** SENAITE HA-PROXY [DONE] ********************"

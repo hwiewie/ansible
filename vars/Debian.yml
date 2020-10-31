@@ -1,0 +1,20 @@
+---
+
+apt_packages:
+    - git
+    - htop
+    - screen
+    - tree
+    - lynx
+    - libffi-dev
+    - gcc
+    - zlib1g-dev
+    - libexpat1-dev
+    - libxslt1.1
+    - gnuplot
+    - libcairo2
+    - libpango1.0-0
+    - libgdk-pixbuf2.0-0
+    - ssl-cert
+    - acl
+    - libfreetype6-dev
