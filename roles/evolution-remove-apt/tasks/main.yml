@@ -1,0 +1,10 @@
+---
+- name: Evolution - remove apt packages
+  become: true
+  apt:
+    name: "{{ item }}"
+    state: absent
+    autoremove: "yes"
+  loop:
+    - evolution-ews
+    - evolution

@@ -1,0 +1,92 @@
+---
+
+- name: 'Check mandatory variables are defined'
+  assert:
+    that:
+      - stroom_user is defined
+
+- import_role:
+    name: setup/yum_update
+
+# Install EPEL yum repo (for jq install)
+- name: Check if EPEL YUM repo is already configured.
+  become: true
+  stat: path={{ epel_repofile_path }}
+  register: epel_repofile_result
+ 
+- name: Install EPEL YUM repo.
+  become: true
+  yum:
+    name: "{{ epel_repo_url }}"
+    state: present
+  register: result
+  when: not epel_repofile_result.stat.exists
+ 
+- name: Import EPEL GPG key.
+  become: true
+  rpm_key:
+    key: "{{ epel_repo_gpg_key_url }}"
+    state: present
+  when: not epel_repofile_result.stat.exists
+
+# Install common command line tools
+- name: YUM install various command line tools
+  become: true
+  yum:
+    name: "{{ packages }}"
+    state: present
+  vars:
+    packages:
+      - bash
+      - bind-utils # for nslookup
+      - coreutils  # realpath is used by some stroom scripts
+      - curl
+      - git # Needed for migration testing, but useful to have
+      - htop # Useful process monitoring
+      - httpie  # Used by some stroom scripts
+      - iproute  # needed for the ip command used in our scripts
+      - jq  # Used by some stroom scripts, handy for REST json munging
+      - net-tools
+      - python  # Not sure we need it but just in case
+      - python3  # Not sure we need it but just in case
+      - unzip
+      - vim  # vi is not a mustard cutter
+
+- name: Ensure firewalld is running
+  become: true
+  service: 
+    name: firewalld 
+    state: started 
+    enabled: true
+
+- name: "Ensure we have user {{ stroom_user }} for running stroom software"
+  become: true
+  user:
+    name: "{{ stroom_user }}"
+
+  # Allows nodes to see ech other when there is no dns server availble
+  # Attemps to get the IP address of the host from (in this order):
+  # The variable 'public_ip_address' as set when using vagrant
+  # The 'default' ipv4 address
+  # The first ipv4 address in the list of addresses
+  # Needs gather_facts
+- name: Add IP address of all hosts to /etc/hosts on all hosts
+  become: true
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '.*{{ item }}$'
+    line: "{{ hostvars[item]['public_ip_address'] 
+      | default(hostvars[item]['ansible_default_ipv4']['address']
+      | default(hostvars[item]['ansible_all_ipv4_addresses'][0])) }} {{item}}"
+    state: present
+  when: (hostvars[item].public_ip_address is defined 
+      or hostvars[item].ansible_default_ipv4 is defined 
+      or hostvars[item].ansible_all_ipv4_addresses is defined )
+    and add_etc_hosts_entries | default(true) == true
+  with_items: "{{ groups.all }}"
+  loop_control:
+    label: "{{ hostvars[item]['public_ip_address'] 
+      | default(hostvars[item]['ansible_default_ipv4']['address']
+      | default(hostvars[item]['ansible_all_ipv4_addresses'][0])) }} {{ item }}"
+  tags:
+    - etc_hosts

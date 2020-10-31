@@ -1,0 +1,88 @@
+- block:
+
+  - block:
+
+    - name: Set VCIN VM QCOW2 location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "VSD-*.qcow2"
+
+    - name: Register VCIN QCOW2 variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    when: vcins | map(attribute='target_server_type') | list is issuperset(["kvm"])
+
+  - block:
+
+    - name: Set VCIN OVA location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "VSD-*.ova"
+
+    - name: Register VCIN OVA variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    when: vcins | map(attribute='target_server_type') | list is issuperset(["vcenter"])
+
+  - name: Find name of VCIN Migration ISO File
+    include_role:
+      name: common
+      tasks_from: find-file.yml
+    vars:
+      pattern: "VSD-migration-scripts-*.iso"
+
+  - name: Register VCIN migration iso file with proper path and script locations for use in other playbooks
+    set_fact:
+      vsd_migration_iso_path: "{{ file_path }}"
+      vsd_migration_iso_file_name: "{{ file_name }}"
+
+  - name: Register that upgrade files are missing
+    set_fact:
+      missing_image_file: true
+    when: missing_file | default(True)
+
+  - name: Verifying VCIN Active/Standby variables
+    include_role:
+      name: common
+      tasks_from: vcin-validate-as-vars
+    with_items: "{{ vcins | json_query('[?master_vcin].master_vcin') }}"
+
+  - name: Disable HA deployment for VCIN
+    set_fact:
+      disable_vcin_ha: True
+
+  - name: Verify VCIN management gateway is in correct IP range
+    include_role:
+      name: common
+      tasks_from: check-ip-in-range.yml
+    vars:
+      ip_address: "{{ item.mgmt_gateway }}"
+      netaddr: "{{ item.mgmt_ip }}"
+      netmask: "{{ item.mgmt_ip_prefix }}"
+    with_items: "{{ vcins }}"
+
+  - name: Create host_vars files for vcins
+    include_tasks: write-host-files.yml
+    vars:
+      component_template: vsd
+      component_hostname: "{{ component.hostname }}"
+      is_vcin: True
+    loop_control:
+      loop_var: component
+    with_items: "{{ vcins }}"
+
+  - name: Re-enabling HA testing based on VSD count
+    set_fact:
+      disable_vcin_ha: False
+
+  when: vcins is defined and vcins|length > 0

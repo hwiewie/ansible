@@ -1,0 +1,23 @@
+---
+- name: install packages
+  package:
+    name:
+      - ostree
+      - flatpak
+      - gnupg2
+    state: latest
+  tags:
+    - packages
+
+- name: create user
+  user:
+    name: "{{ repo_manager_user }}"
+    home: "{{ repo_manager_home }}"
+    uid: "{{ repo_manager_uid | default(omit) }}"
+    system: yes
+
+- name: install and configure flat-manager
+  include: flat-manager.yml
+
+- name: configure gpg-agent
+  include: gpg-agent.yml

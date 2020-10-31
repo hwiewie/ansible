@@ -1,0 +1,59 @@
+---
+- name: Set local variable with vmname
+  set_fact:
+    vm_name: "{{ vmname }}"
+
+- name: Setup KVM on target server
+  include_role:
+    name: common
+    tasks_from: setup-kvm
+
+- include_role:
+    name: check-node-running
+
+- name: Display if skipping predeploy
+  debug:
+    msg:
+      - "****************************************************"
+      - "Skipping VSC predeploy because it is already present"
+      - "****************************************************"
+  when: node_present
+
+- block:
+
+  - include_role:
+      name: common
+      tasks_from: retrieve-kvm-image
+    vars:
+      dest_filename: "{{ inventory_hostname }}.qcow2"
+
+  - name: Setup VSC temporary configuration files
+    template:
+      src: bof.cfg.j2
+      backup: no
+      dest: "{{ images_path }}/{{ vm_name }}/bof.cfg"
+
+  - name: Copy temporary configuration files to the VSC image
+    command: >-
+      guestfish --rw -a {{ images_path }}/{{ vm_name }}/{{ inventory_hostname }}.qcow2
+      -m {{ vsc_partition }} copy-in {{ images_path }}/{{ vm_name }}/bof.cfg /
+
+  - name: Remove temporary configuration files
+    file: path={{ images_path }}/{{ vm_name }}/bof.cfg state=absent
+
+  - name: Preallocate disk space to avoid pausing the VM, this also checks disk space
+    command: "fallocate -x -l {{ vsc_fallocate_size_gb }}G {{ images_path }}/{{ vm_name }}/{{ inventory_hostname }}.qcow2"
+    when: vsc_fallocate_size_gb == 1
+
+  - name: Define and start VSC VM
+    include_role:
+      name: common
+      tasks_from: kvm-start-vm
+    vars:
+      vm_xml: "{{ lookup('template', 'vsc.xml.j2') }}"
+      autostart_enabled: true
+
+  when: not node_present
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"

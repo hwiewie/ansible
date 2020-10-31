@@ -1,0 +1,64 @@
+- include_role:
+    name: check-skip-target-server
+  vars:
+    - target_server_list: ["kvm", "vcenter", "openstack"]
+
+- include_role:
+    name: skip-actions
+  vars:
+    - action: vsc_predeploy
+
+- include_role:
+    name: check-node-reachability
+
+- block:
+  - debug: var=vsc_creds
+
+  - name: Wait for VSC ssh to be ready
+    include_role:
+      name: common
+      tasks_from: wait-for-ssh-port
+    vars:
+      ssh_host: "{{ vsc_creds.host }}"
+      ssh_password: "{{ vsc_creds.password }}"
+      ssh_user: "{{ vsc_creds.username }}"
+      check_login: True
+
+  - name: Get output of 'show version' (ignoring errors)
+    sros_command:
+      commands:
+        - show version
+      provider: "{{ vsc_creds }}"
+    ignore_errors: yes
+    delegate_to: localhost
+    register: sh_version
+
+  when: node_reachable
+
+# TODO
+# Check sh_version against image version
+
+- name: Set fact for VSC present
+  set_fact:
+    node_present: "{{ node_reachable | default(False) and sh_version is defined }}"
+
+- import_tasks: kvm.yml
+  when: target_server_type is match("kvm")
+  tags:
+    - vsc
+    - vsc-predeploy
+
+- import_tasks: openstack.yml
+  when: target_server_type is match("openstack")
+  tags:
+    - vsc
+    - openstack
+    - vsc-predeploy
+
+- import_tasks: vcenter.yml
+  when: target_server_type is match("vcenter")
+  tags:
+    - vsc
+    - vsc-predeploy
+
+

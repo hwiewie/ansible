@@ -1,0 +1,90 @@
+---
+- hosts: localhost
+  pre_tasks:
+    - name: Check for Ansible version
+      assert:
+        that: "ansible_version.full is version('2.9.2', operator='ge', strict=True)"
+        msg: "Ansible version must be greater than or equal to 2.9.2. Found Ansible version {{ansible_version.full}}"
+
+    - name: Get Paramiko version
+      shell:
+        cmd: pip freeze | grep paramiko
+      register: paramiko_info
+
+    - name: Extract version from output
+      set_fact:
+        paramiko_version: "{{ paramiko_info.stdout | regex_search('[^=].\\d.+\\d') }}"
+
+    - name: Check Paramiko version
+      assert:
+        that: "paramiko_version is version('2.6.0', operator='ge', strict=True)"
+        msg: "Paramiko version must be greater than or equal to 2.6.0. Found paramiko version {{ paramiko_version }}"
+
+  tasks:
+
+    - include_role:
+        name: common
+        tasks_from: read-plugin-configs
+
+    - include_role:
+        name: common
+        tasks_from: gen-deployment-md5
+
+    - name: Gather last deployment MD5
+      stat:
+        path: "{{ inventory_dir }}/deployment.md5.yml"
+      register: deployment_md5_file_stat
+
+    - name: Read last deployment MD5
+      set_fact:
+        last_deployment_md5_list: "{{ lookup('file', deployment_md5_file_stat.stat.path) | from_yaml }}"
+      when: deployment_md5_file_stat.stat.exists
+
+    - name: Set fact for changed deployment
+      set_fact:
+        is_deployment_changed: "{{ not deployment_md5_file_stat.stat.exists or last_deployment_md5_list != deployment_md5_list }}"
+
+    - name: Display if skipping build
+      debug:
+        msg:
+          - "************************************************"
+          - "Skipping build because deployment did not change"
+          - "************************************************"
+      when: not is_deployment_changed
+
+    - block:
+
+        - include_role:
+            name: common
+            tasks_from: read-deployment
+
+        - include_role:
+            name: common
+            tasks_from: set-major-minor-versions
+          vars:
+            upgrade_from_version: "{{ upgrade.upgrade_from_version }}"
+            upgrade_to_version: "{{ upgrade.upgrade_to_version }}"
+          when: upgrade.upgrade_from_version is defined and upgrade.upgrade_to_version is defined
+
+        - name: Set if inplace upgrade is supported
+          set_fact:
+            inplace: "{{ inplace_upgrade | default(false) }}"
+
+        - include_role:
+            name: build
+
+        - name: Write deployment MD5 to file
+          copy:
+            content: "{{ deployment_md5_list | to_nice_yaml }}"
+            dest: "{{ inventory_dir }}/deployment.md5.yml"
+          when: not missing_image_file | default(False)
+
+      when: is_deployment_changed
+
+    - name: Verify that inventory can be read successfully
+      include_vars: "{{ inventory_dir }}/group_vars/all"
+      no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+    - name: Verify passwords can be decrypted
+      debug: var=vsd_auth
+      no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"

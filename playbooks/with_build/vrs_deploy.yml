@@ -1,0 +1,17 @@
+- hosts: vrss
+  gather_facts: no
+  pre_tasks:
+    - name: Lets run VRS deploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vrs_deploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vrs-deploy
+  become: yes

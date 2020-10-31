@@ -1,0 +1,11 @@
+
+- name: vsd_health
+  import_playbook: "vsd_health.yml"
+- name: vcin_health
+  import_playbook: "vcin_health.yml"
+- name: vstat_health
+  import_playbook: "vstat_health.yml"
+- name: vsc_health
+  import_playbook: "vsc_health.yml"
+- name: vrs_health
+  import_playbook: "vrs_health.yml"

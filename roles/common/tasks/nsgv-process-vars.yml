@@ -1,0 +1,56 @@
+- block:
+
+  - name: Verify that OpenFlow is set to use TLS (required for NSGv)
+    assert:
+      that: openflow_tls | default(true)
+      msg: "openflow_tls is False. It must be undefined (default) or set to True in common.yml to support NSGv. Quitting."
+
+  - block:
+    - name: Set NSGV VM QCOW2 location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "ncpe_centos7.qcow2"
+
+    - name: Register NSGV QCOW2 variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    when: nsgvs | map(attribute='target_server_type') | list is issuperset(["kvm"])
+
+  - block:
+
+    - name: Set NSGV VM OVF location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "NSG-*.ovf"
+
+    - name: Register NSGV OVF variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    when: nsgvs | map(attribute='target_server_type') | list is issuperset(["vcenter"])
+
+  - name: Check that nsgv_bootstrap is present if required
+    assert:
+      that: nsgv_bootstrap is defined
+      msg: One or more of your NSGvs defines bootstrap_method = zfb_metro.  This requires nsgv_bootstrap.yml to be present in your deployment, but it is missing.
+    when: nsgvs | map(attribute='bootstrap_method') | list is issuperset(["zfb_metro"])
+
+  - name: Create host_vars files for nsgvs
+    include_tasks: write-host-files.yml
+    vars:
+      component_template: nsgv
+      component_hostname : "{{ component.vmname }}"
+    loop_control:
+      loop_var: component
+    with_items: "{{ nsgvs }}"
+
+  when: nsgvs is defined and nsgvs|length > 0

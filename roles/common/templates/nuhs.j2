@@ -1,0 +1,93 @@
+# *** WARNING ***
+# This is a generated file. Manual changes to this file
+# will be lost if reset-build or build is run
+#
+
+target_server_type: kvm
+
+required_bridges:
+  - mgmt
+
+target_server: {{ item.target_server }}
+
+hostname: {{ item.hostname }}
+
+{% if item.vmname is defined %}
+vmname: {{ item.vmname }}
+{% else %}
+vmname: {{ item.hostname }}
+{% endif %}
+
+mgmt_ip: {{ item.mgmt_ip }}
+mgmt_prefix: {{ item.mgmt_ip_prefix }}
+mgmt_gateway: {{ item.mgmt_gateway }}
+
+{% if item.internal_ip is defined %}
+internal_ip: {{ item.internal_ip }}
+internal_prefix: {{ item.internal_ip_prefix | default(24) }}
+internal_gateway: {{ item.internal_gateway }}
+{% endif %}
+
+{% if item.external_interface_list is defined %}
+external_interfaces:
+{% for interface in nuh_external_interfaces %}
+{% for external_if in item.external_interface_list %}
+{% if interface.name in external_if %}
+    - name: "External{{ loop.index }}"
+      external_prefix: {{ interface.external_ip_prefix | default(24) }}
+      external_ip: {{ interface.external_ip }}
+      external_gateway: {{ interface.external_gateway }}
+      external_bridge: {{ interface.external_bridge }}
+      vlan: {{ interface.vlan | default(0) }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if item.mgmt_bridge is defined %}
+mgmt_bridge: {{ item.mgmt_bridge }}
+{% endif %}
+{% if item.internal_bridge is defined %}
+internal_bridge: {{ item.internal_bridge }}
+{% endif %}
+
+{% if nuhs|length == 1%}
+nuh_sa_or_ha: sa
+{% else %}
+nuh_sa_or_ha: ha
+{% endif %}
+
+{% if item.cpuset is defined %}
+cpuset:
+{% for cpus in item.cpuset %}
+  - {{ cpus }}
+{% endfor %}
+{% endif %}
+
+image_path: {{ image_path | default("MISSING") }}
+image_file_name: {{ image_file_name | default("MISSING") }}
+nuh_timezone: {{ item.timezone | default("America/Toronto") }}
+skip_vsd_installed_check: {{ item.skip_vsd_installed_check | default(false) }}
+health_monitoring_agent: {{ item.health_monitoring_agent | default("none") }}
+
+vsdconfig_enable: {{ nuh_common.vsdconfig_enable | default(false) | lower }}
+elasticsearch_enable: {{ nuh_common.elasticsearch_enable | default(false) | lower }}
+
+{% if nuh_vrrp is defined and nuh_vrrp %}
+vrrp:
+{% for vr in nuh_vrrp %}
+  - router_id: {{ vr.router_id }}
+    interface: {{ vr.interface }}
+{% if vr.vip is defined and vr.vip %}
+    vip:
+{% for vip_address in vr.vip %}
+      - {{ vip_address }}
+{% endfor %}
+{% endif %}
+    enabled: {{ vr.enabled | default(true) }}
+{% endfor %}
+{% endif %}
+
+{% if item.custom_configuration_file_location is defined %}
+custom_configuration_file_location: {{ item.custom_configuration_file_location }}
+{% endif %}

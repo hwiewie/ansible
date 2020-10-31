@@ -1,0 +1,77 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      - 127.0.0.1:9093
+
+rule_files:
+  - rules/*.rules
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+    - targets:
+      - 127.0.0.1:9090
+
+  - job_name: 'node'
+    static_configs:
+{% for hostgroup in prometheus_node_hostgroups %}
+    - targets:
+{% for host in groups[hostgroup] %}
+{% if hostvars[host].ansible_ztnfaipej6 is defined %}
+      - {{ hostvars[host].ansible_ztnfaipej6['ipv4']['address'] }}:9100
+{% endif %}
+{% if hostvars[host].ansible_zt0 is defined %}
+      - {{ hostvars[host].ansible_zt0['ipv4']['address'] }}:9100
+{% endif %}
+{% endfor %}
+      labels:
+        role: {{ hostgroup }}
+{% endfor %}
+
+    relabel_configs:
+{% for host in groups['all'] %}
+{% if hostvars[host].ansible_ztnfaipej6 is defined %}
+      - source_labels: [ __address__ ]
+        target_label: instance
+        regex: {{ hostvars[host].ansible_ztnfaipej6['ipv4']['address'] }}:9100
+        replacement: {{ host }}
+{% endif %}
+{% if hostvars[host].ansible_zt0 is defined %}
+      - source_labels: [ __address__ ]
+        target_label: instance
+        regex: {{ hostvars[host].ansible_zt0['ipv4']['address'] }}:9100
+        replacement: {{ host }}
+{% endif %}
+{% endfor %}
+
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://flathub.org
+        - https://flathub.org/stats/
+        - https://flathub.org/builds/
+        - https://discourse.flathub.org
+        - https://flatpak.org
+        - https://docs.flatpak.org
+        - https://hub.flathub.org/status
+        - https://flathub.org/repo/flathub.flatpakrepo
+        - https://dl.flathub.org/repo/flathub.flatpakrepo
+{% for host in groups.frontend %}
+        - https://{{ host }}/repo/flathub.flatpakrepo
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

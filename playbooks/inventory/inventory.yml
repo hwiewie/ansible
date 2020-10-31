@@ -1,0 +1,6 @@
+- name: Calling Inventory Role
+  hosts: localhost
+  connection: local
+  roles:
+    - pre
+    - lenovo.lxca-inventory

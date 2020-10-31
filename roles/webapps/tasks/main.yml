@@ -1,0 +1,21 @@
+---
+- name: create deploy user
+  user:
+    name: deploy
+    home: "{{ webapps_root_dir }}"
+    system: yes
+
+- name: create webapps root directory
+  file:
+    path: '{{ webapps_root_dir }}'
+    state: directory
+
+- name: configure flatpak.org
+  include: flatpak.yml
+  tags:
+    - flatpak
+
+- name: configure flathub.org
+  include: flathub.yml
+  tags:
+    - flathub

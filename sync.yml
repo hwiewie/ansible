@@ -1,0 +1,8 @@
+---
+- name: sync
+  hosts: stage
+  user: ubuntu
+  tasks:
+      - synchronize: src=data/ dest=/usr/share/nginx/iipsrv/images
+        become: yes
+        become_user: root

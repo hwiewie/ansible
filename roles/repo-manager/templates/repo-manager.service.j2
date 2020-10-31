@@ -1,0 +1,15 @@
+[Unit]
+Description=repo-manager
+After=postgresql.service
+
+[Service]
+User={{ repo_manager_user }}
+Group={{ repo_manager_user }}
+WorkingDirectory={{ repo_manager_home }}
+ExecStart=/usr/local/bin/flat-manager
+
+Environment=REPO_CONFIG=/etc/flat-manager.json
+Environment=RUST_BACKTRACE=1
+
+[Install]
+WantedBy=multi-user.target

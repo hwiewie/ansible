@@ -1,0 +1,37 @@
+# Install Pre-Requisites
+- name: Pull facts of localhost
+  setup:
+  delegate_to: localhost
+
+# Create directory on SR to store  python policy scripts
+- name: Create directory used for storing python policy scripts
+  sros_command:
+    commands:
+      - 'file md {{ scriptdir }}'
+    provider: "{{ provider_creds }}"
+  delegate_to: localhost
+
+
+- name: Set local path of python policy scripts
+  set_fact: local_scripts_path="{{ role_path }}/files"
+
+- name: Get list of Python scripts
+  find:
+    path: "{{ local_scripts_path }}"
+    pattern: "*.py"
+  register: rc_pythonscripts
+  delegate_to: localhost
+
+- debug: var=rc_pythonscripts verbosity=1
+
+- name: Copy Python-scripts
+  shell: "{{ vsr_scp_python_scripts }}"
+  no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+  with_items: "{{ rc_pythonscripts.files | map(attribute='path') | list }}"
+  delegate_to: localhost
+
+- name: Set pythonscripts variable
+  set_fact: pythonscripts="{{ rc_pythonscripts.files | map(attribute='path') | list | map('basename') | list | map('splitext') | list | map('first') | list }}"
+  when: rc_pythonscripts.matched > 0
+
+- debug: var=pythonscripts verbosity=1

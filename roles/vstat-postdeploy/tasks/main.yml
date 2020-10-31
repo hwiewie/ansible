@@ -1,0 +1,12 @@
+- name: Clean known_hosts of VSTATs (ignoring errors)
+  known_hosts:
+    name: "{{ mgmt_ip }}"
+    state: absent
+  delegate_to: localhost
+  no_log: True
+  ignore_errors: True
+
+- name: Check VSTAT health after deployment
+  import_role: name="vstat-health"
+  vars:
+    report_filename: vstat-postdeploy-health

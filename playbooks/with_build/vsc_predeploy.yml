@@ -1,0 +1,27 @@
+---
+- hosts: vscs
+  gather_facts: no
+  serial: 1
+  pre_tasks:
+    - name: Check if VSC prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vsc_fallocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+    - name: Lets run VSC predeploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsc_predeploy
+          - install_vscs
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsc-predeploy

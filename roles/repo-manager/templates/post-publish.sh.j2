@@ -1,0 +1,33 @@
+#!/bin/bash
+REPONAME="$1"
+REPODIR="$2"
+
+set -e
+
+# Work around issue with flat-manager getting the permissions wrong (not group readable + directories executable)
+find {{ repo_manager_repodir }}/$REPONAME/screenshots ! -perm -og+rX -exec chmod go+rX {} \;
+find {{ repo_manager_repodir }}/$REPONAME/deltas  ! -perm -og+rX -exec chmod go+rX {} \;
+
+# purge intermediate front-* caches and then CDN
+# (Fastly-Soft-Purge is a no-op on front-*)
+if [ $REPONAME == "stable" ]; then
+    REPO=repo
+elif [ $REPONAME == "beta" ]; then
+    REPO=beta-repo
+else
+    exit
+fi
+
+# Upstream for Fastly; purge summary here first
+for host in front-hex2 front-ams; do
+    curl -X PURGE https://${host}.flathub.org/$REPO/summary{,.sig} || true
+done
+
+# Fastly CDN
+curl -X PURGE -H "Fastly-Soft-Purge: 1" https://dl.flathub.org/$REPO/summary{,.sig} || true
+
+# Seoul servers use Fastly as upstream so should be purged last
+for host in front-sel front-sel2; do
+    curl -X PURGE https://${host}.flathub.org/$REPO/summary{,.sig} || true
+done
+

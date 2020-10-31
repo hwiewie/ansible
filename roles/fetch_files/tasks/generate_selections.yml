@@ -1,0 +1,7 @@
+- name: Generate selections
+  template:
+    src: templates/selections.j2
+    dest: /irix/selections
+    owner: vagrant
+    group: vagrant
+    mode: 0744

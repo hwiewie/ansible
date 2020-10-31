@@ -1,0 +1,32 @@
+- name: SD-WAN Portal 1 bootstrap
+  command: /opt/vnsportal/cluster_bootstrap.sh
+  when: inventory_hostname == portal1.hostname
+
+- name: Wait for the Portal 1 bootstrap to complete
+  command: "docker logs vnsportal-cluster-bootstrap"
+  register: log_output
+  until: log_output.stdout.find("Ready for start up") != -1
+  retries: 20
+  delay: 5
+  when: inventory_hostname == portal1.hostname
+
+- name: SD-WAN Portal 2 start up
+  command: /opt/vnsportal/start.sh
+  when: inventory_hostname == portal2.hostname
+
+- name: Wait for the Portal 2 start up to complete
+  command: curl http://localhost:8080/vnsportal/health    # noqa 303
+  no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+  register: curl_output
+  until: curl_output.stdout.find("UP") != -1
+  retries: 30
+  delay: 5
+  when: inventory_hostname == portal2.hostname
+
+- name: SD-WAN Portal 3 start up
+  command: /opt/vnsportal/start.sh
+  when: inventory_hostname == portal3.hostname
+
+- name: SD-WAN Portal 1 start up
+  command: /opt/vnsportal/start.sh
+  when: inventory_hostname == portal1.hostname

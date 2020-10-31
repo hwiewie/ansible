@@ -1,0 +1,13 @@
+---
+- name: Install PPA
+  become: true
+  apt_repository:
+    repo: ppa:caffeine-developers/ppa
+    state: present
+
+- name: Install apt package
+  become: true
+  apt:
+    name: "caffeine"
+    state: present
+    update_cache: "yes"

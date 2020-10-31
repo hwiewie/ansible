@@ -1,0 +1,20 @@
+---
+- name: Enable Local Volume on Master
+  yedit:
+    src: '{{ openshift_local_volume_master_config }}'
+    key: kubernetesMasterConfig.{{ item }}.feature-gates
+    value:
+    - PersistentLocalVolumes=true
+    - VolumeScheduling=true
+    - MountPropagation=true
+    state: present
+    backup: yes
+  with_items:
+     - apiServerArguments
+     - controllerArguments
+     - schedulerArguments
+
+
+- import_role:
+    name: common
+    tasks_from: restart-master.yaml

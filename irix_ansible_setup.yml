@@ -1,0 +1,12 @@
+---
+- name: Copy settings into the VM
+  hosts: all
+  tasks:
+  - import_role:
+     name: settings
+- name: run fetch_files role
+  hosts: all
+  tasks:
+  - import_role:
+     name: fetch_files
+    become: true

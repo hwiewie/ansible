@@ -1,0 +1,106 @@
+# Deployment (configuration) files
+deployment_files:
+  - name: "common"
+    is_list: no
+    required: yes
+    encrypted: no
+  - name: "credentials"
+    is_list: yes
+    required: no
+    encrypted: yes
+  - name: "upgrade"
+    is_list: no
+    required: no
+    encrypted: no
+  - name: "vsds"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vscs"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vstats"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vnsutils"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "nuhs"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "nuh_external_interfaces"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "nuh_common"
+    is_list: no
+    required: no
+    encrypted: no
+  - name: "nuh_vrrp"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "dnss"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vrss"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vsrs"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "vcins"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "nsgvs"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "nsgv_bootstrap"
+    is_list: no
+    required: no
+    encrypted: no
+  - name: "nsgv_access_ports"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "netconf_managers"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "stcvs"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "stcv_global"
+    is_list: no
+    required: no
+    encrypted: no
+  - name: "proxys"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: "portals"
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: dnss
+    is_list: yes
+    required: no
+    encrypted: no
+  - name: webfilters
+    is_list: yes
+    required: no
+    encrypted: no
+
+# ntp sync params
+ntp_sync_retries: 150
+ntp_sync_delay: 10

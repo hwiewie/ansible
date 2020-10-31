@@ -1,0 +1,45 @@
+base_admin_group: "{{ (ansible_os_family == 'Debian') | ternary('sudo', 'wheel') }}"
+base_firewall: firewalld
+base_packages:
+ - htop
+ - iftop
+ - iotop
+ - lsof
+ - mosh
+ - mtr
+ - net-tools
+ - psmisc
+ - socat
+ - tzdata
+base_packages_deb:
+ - aptitude
+ - host
+ - netcat
+base_firewall_dmz_sources:
+ - 172.28.0.0/16
+ - fca2:895:f500::/40
+
+base_mythic_firewall_sources:
+ - 93.93.128.162
+ - 2a00:1098:0:80:1000::100
+ - 46.235.226.128
+ - 2a00:1098:0:80:1000::14
+ - 93.93.131.51
+ - 2a00:1098:0:86:1000::a
+ - 93.93.128.100
+ - 2a00:1098:0:86:1000::13
+base_mythic_firewall_services:
+ - ssh
+base_mythic_firewall_ports:
+ - 4949
+
+base_zerotier_network_id: a84ac5c10a425034
+base_zerotier_api_delegate: master.flathub.org
+base_zerotier_accesstoken: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          32353230643130653066623131336263636236626338343138333866666663366166333231343066
+          3033326266633830333764306237323066373431363637610a653733316338353532326661323130
+          37636337626564613638306530313039356661353436303365373665333838353730363266613337
+          3166363930383034630a383965323733343638636464633137303238383236393261656134336638
+          35343331666562376536626636333139336638613861663964663264383435383637633537313731
+          6638363539366233613764356166356236383063353264633263

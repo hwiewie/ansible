@@ -1,0 +1,14 @@
+- name: Check the status of shards being processed
+  uri:
+    url: "{{ health_url }}"
+    method: GET
+  register: es_health
+  until: es_health.json.unassigned_shards == 0
+  retries: 60
+  delay: 10
+
+- name: Get ES Status
+  uri:
+    url: "{{ health_url }}"
+    method: GET
+  register: es_status

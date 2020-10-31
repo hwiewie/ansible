@@ -1,0 +1,158 @@
+---
+- name: Set local variable with vmname
+  set_fact:
+    vm_name: "{{ vmname }}"
+
+- name: Display if skipping predeploy
+  debug:
+    msg:
+      - "****************************************************"
+      - "Skipping NSG-V predeploy because it is already present"
+      - "****************************************************"
+  when: node_running
+
+- block:
+
+  - block:
+    - name: Create local temp directory
+      tempfile:
+        state: directory
+        path: "{{ lookup('env', 'TMPDIR') | default('/tmp/', true) }}"
+      delegate_to: localhost
+      register: mktemp_output
+
+    - name: Generate ISO file
+      create_zfb_profile:
+        nsgv_path: "{{ mktemp_output.path }}"
+        fact_name: nsgv_already_configured
+        vsd_license_file: "{{ vsd_license_file }}"
+        vsd_auth: "{{ vsd_auth }}"
+        zfb_constants: "{{ zfb_constants }}"
+        zfb_proxy_user: "{{ zfb_proxy_user }}"
+        zfb_nsg: "{{ zfb_nsg }}"
+        zfb_ports: "{{ zfb_ports }}"
+        zfb_nsg_infra: "{{ zfb_nsg_infra }}"
+        zfb_vsc_infra: "{{ zfb_vsc_infra }}"
+      delegate_to: localhost
+
+    - name: Ensure NSGV has the correct configuration
+      assert:
+        that: "not node_running or nsgv_already_configured"
+        msg: "NSGV is already running, but there was no corresponding configuration for it."
+
+    - name: Copy the ISO image to vcenter datastore
+      vsphere_copy_ansible_issue_58168:
+            src: "{{ mktemp_output.path }}/user_image.iso"
+            path: "{{ vmname }}/user_image.iso"
+            host: "{{ target_server }}"
+            login: "{{ vcenter.username }}"
+            password: "{{ vcenter.password }}"
+            datacenter: "{{ vcenter.datacenter }}"
+            datastore: "{{ vcenter.datastore }}"
+            validate_certs: no
+      delegate_to: localhost
+
+    when: bootstrap_method == 'zfb_metro'
+
+  - name: Configure vCenter path
+    set_fact:
+      vcenter_path: "{{ target_server }}/{{ vcenter.datacenter }}/host/{{ vcenter.cluster }}\
+        {{ (vcenter.host_reference != 'NONE') | ternary ('/' + vcenter.host_reference | urlencode, '') }}\
+        {{ (vcenter.resource_pool != 'NONE') | ternary ('/Resources/' + vcenter.resource_pool | urlencode, '') }}"
+
+  - name: Set power on when NSGv mac does not need to be set
+    set_fact:
+      power_on_arg: "--powerOn"
+    when: nsgv_mac is not defined
+
+  - name: Clear power on when NSGv mac does need to be set
+    set_fact:
+      power_on_arg: ""
+    when: nsgv_mac is defined
+
+  - name: Configure ovftool command
+    set_fact:
+      ovftool_command: >-
+        {{ vcenter_global.ovftool }}
+        --acceptAllEulas
+        --noSSLVerify
+        {{ power_on_arg }}
+        {% if hostvars[inventory_hostname].ansible_verbosity > 0 %}
+        --X:logLevel=verbose
+        --X:logToConsole
+        {% else %}
+        --machineOutput
+        {% endif %}
+        -dm=thin
+        -ds={{ vcenter.datastore }}
+        -n={{ vm_name }}
+        --net:"port_vmnic={{ mgmt_bridge }}"
+        --net:"OVS DataPath={{ data_bridge }}"
+        --net:"OVS Management={{ access_bridge }}"
+        "{{ image_path }}/{{ image_file_name }}"
+
+  - name: Deploy NSGv image on vCenter
+    include_role:
+      name: common
+      tasks_from: vcenter-deploy-image
+
+  - block:
+
+    - name: Set MAC address when defined
+      metroae_vmware_set_mac:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        datacenter: "{{ vcenter.datacenter }}"
+        name: "{{ vm_name }}"
+        interface_index: 0
+        mac: "{{ nsgv_mac }}"
+        validate_certs: no
+      delegate_to: localhost
+
+    - name: Power on guest after setting MAC address
+      vmware_guest:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        datacenter: "{{ vcenter.datacenter }}"
+        name: "{{ vm_name }}"
+        validate_certs: no
+        state: poweredon
+      delegate_to: localhost
+
+    when: nsgv_mac is defined
+
+  - block:
+    - name: Mount ISO when ZFB method is metro
+      vmware_guest:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        name: "{{ vm_name }}"
+        validate_certs: no
+        state: present
+        cdrom:
+          type: "iso"
+          iso_path: "[{{ vcenter.datastore }}] {{ inventory_hostname }}/user_image.iso"
+      delegate_to: localhost
+    when: bootstrap_method == 'zfb_metro'
+
+  - block:
+    - name: Mount ISO when ZFB method is external
+      vmware_guest:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        name: "{{ vm_name }}"
+        validate_certs: no
+        state: present
+        cdrom:
+          type: "iso"
+          iso_path: "[{{ vcenter.datastore }}] {{ iso_path }}/{{ iso_file }}"
+      delegate_to: localhost
+    when: bootstrap_method == 'zfb_external'
+
+  - debug: var=vm_facts verbosity=1
+
+  when: not node_running

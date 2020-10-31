@@ -1,0 +1,193 @@
+
+- name: Gather deployment file stats
+  stat:
+    path: "{{ deployment_dir }}/{{ item.name }}.yml"
+  register: deployment_file_stat
+  with_items: "{{ deployment_files }}"
+
+- name: Validate required deployment files exist
+  assert:
+    that: "not {{ item.0.required }} or {{ item.1.stat.exists }}"
+    msg: "Required deployment file {{ item.0.name }}.yml does not exist"
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+
+- name: Validate deployment file yaml format
+  yaml_checker:
+    path: "{{ item.stat.path }}"
+  when: item.stat.exists
+  with_items: "{{ deployment_file_stat.results }}"
+
+- name: Validate deployment files against schemas
+  validate_against_schema:
+    path: "{{ item.1.stat.path }}"
+    schema: "{{ schema_dir }}/{{ item.0.name }}.json"
+  when: item.1.stat.exists
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+
+- name: Read deployment global files
+  include_vars:
+    file: "{{ item.1.stat.path }}"
+    name: "{{ item.0.name }}"
+  when: item.1.stat.exists and not item.0.is_list and not item.0.encrypted
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+
+- name: Create empty encryption set
+  set_fact:
+    encrypted: {}
+
+- name: Read deployment encrypted files
+  read_yaml_with_vault:
+    path: "{{ item.1.stat.path }}"
+    fact_name: credentials
+  when: item.1.stat.exists and item.0.encrypted
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+  no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+- name: Use first credentials set if defined
+  set_fact:
+    encrypted: "{{ credentials[0] }}"
+  when: credentials is defined and credentials | length > 0
+  no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+- name: Default deployment list files to empty
+  set_fact:
+    "{{ item.0.name }}": []
+  when: not item.1.stat.exists and item.0.is_list and not item.0.encrypted
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+
+- name: Read deployment list files
+  set_fact:
+    "{{ item.0.name }}": "{{ lookup('file', item.1.stat.path) | from_yaml }}"
+  when: item.1.stat.exists and item.0.is_list and not item.0.encrypted
+  with_together:
+    - "{{ deployment_files }}"
+    - "{{ deployment_file_stat.results }}"
+
+- name: Validate correct number of VSDs
+  assert:
+    that: "{{ vsds | length in [0, 1, 3, 6] }}"
+    msg: "There needs to be exactly 0, 1, 3 or 6 VSDs defined"
+
+- name: Validate unique VSD hostnames
+  assert:
+    that: "{{ vsds | map(attribute='hostname') | unique | list | length }} == {{ vsds | length }}"
+    msg: "VSD hostname fields must be unique"
+
+- name: Validate unique VSTAT hostnames
+  assert:
+    that: "{{ vstats | map(attribute='hostname') | unique | list | length }} == {{ vstats | length }}"
+    msg: "VSTAT hostname fields must be unique"
+
+- name: Verify that the ntp servers are proper IP address format
+  assert:
+    that: "'{{ item }}'|ipaddr"
+    msg: "{{ item }} is not a valid NTP server IP address, quiting"
+  with_items: "{{ ntp_server_list }}"
+  when: ntp_server_list is defined and ntp_server_list
+
+- name: Verify that the VSC system name is not longer than 32 characters
+  assert:
+    that: "'{{ item.system_name|default(item.hostname) }}'|length <= 32"
+    msg: "'{{ item.system_name|default(item.hostname) }}' is too long to be a valid VSC system name,
+          please define a 'system_name' with up to 32 chars for {{ item.hostname }}"
+  when: item.system_name is defined or item.hostname is defined
+  with_items: "{{ vscs }}"
+
+- name: Verify that the VSC has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != 4"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have 4 elements."
+  when: item.cpuset is defined
+  with_items: "{{ vscs }}"
+
+- name: Verify that the VSD has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ vsd_cpu_cores | default(6) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ vsd_cpu_cores | default(6) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ vsds }}"
+
+- name: Verify that the VSTAT has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ vstat_cpu_cores | default(6) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ vstat_cpu_cores | default(6) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ vstats }}"
+
+- name: Verify that the VCIN has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ vcin_cpu_cores | default(6) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ vcin_cpu_cores | default(6) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ vcins }}"
+
+- name: Verify that the VNSUTIL has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ vnsutils_cpu_cores | default(2) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ vnsutil_cpu_cores | default(2) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ vnsutils }}"
+
+- name: Verify that the NUH has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ nuhs_cpu_cores | default(2) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ nuh_cpu_cores | default(2) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ nuhs }}"
+
+- name: Verify that the PORTAL has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ portal_cpu_cores | default(6) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ portal_cpu_cores | default(6) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ portals }}"
+
+- name: Verify that the Webfilter has the correct number of cpuset defined
+  assert:
+    that: "'{{ item.cpuset | length }}' != {{ webfilter_cpu_cores | default(2) }}"
+    msg: "Incorrect number of cores specified in cpuset for {{ item.hostname }}. Cpuset must have {{ webfilter_cpu_cores | default(2) }} elements."
+  when: item.cpuset is defined
+  with_items: "{{ webfilters }}"
+
+- name: Validate that NSGVs ports are properly configured
+  assert:
+    that: "{{ item.access_port_name is defined and item.access_ports is undefined }} or
+       {{ item.access_port_name is undefined and item.access_ports is defined }}"
+    msg: "Incorrect configuration {{ item.vmname }} has both access_port_name and access_ports defined."
+  with_items: "{{ nsgvs }}"
+
+# TODO:
+# Use the following block to disable the feature for now. We need to update our
+# test infrastructure to accommodate.
+- block:
+
+  - block:
+
+    - name: Verify VSD DNS entries exist at server {{ dns_server_list[0] }}, and hostnames map to their m
+      include_tasks: check-dns.yml
+      with_items: "{{ vsds }}"
+      when: vsds is defined and vsds|length > 0
+
+    - name: Verify VStat DNS entries exist at server {{ dns_server_list[0] }}, and hostnames map to their management IPs
+      include_tasks: check-dns.yml
+      with_items: "{{ vstats }}"
+      when: vstats is defined and vstats|length > 0
+
+    - name: Verify VNS Utils DNS entries exist at server {{ dns_server_list[0] }}, and hostnames map to their IPs
+      include_tasks: check-dns.yml
+      with_items: "{{ vnsutils }}"
+      when: vnsutils is defined and vnsutils|length > 0
+
+    when: dns_server_list is defined and dns_server_list|length > 0
+
+  when: false

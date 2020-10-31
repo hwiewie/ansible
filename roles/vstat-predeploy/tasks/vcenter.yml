@@ -1,0 +1,135 @@
+---
+- block:
+  - name: Verify that upgrade_vmname is defined if this is an upgrade
+    assert:
+      that: "upgrade_vmname is defined"
+      msg: "upgrade_vmname is required for upgrade"
+
+  - name: Set local variable with upgrade_vmname
+    set_fact:
+      vm_name: "{{ upgrade_vmname }}"
+  when: nuage_upgrade | default( False )
+
+- block:
+  - name: Verify that vmname is defined
+    assert:
+      that: "vmname is defined"
+      msg: "vmname is required for vsd_predeploy"
+
+  - name: Set local variable with vmname
+    set_fact:
+      vm_name: "{{ vmname }}"
+  when: not nuage_upgrade | default( False )
+
+- include_role:
+    name: check-node-running
+
+- name: Display if skipping VSTAT predeploy
+  debug:
+    msg:
+      - "****************************************************"
+      - "Skipping VSTAT predeploy because it is already present"
+      - "****************************************************"
+  when: node_present
+
+- block:
+
+  - name: Configure vCenter path and ovftool command
+    include_role:
+      name: common
+      tasks_from: configure-ovftool
+    vars:
+      management_network: "Management"
+
+  - name: Deploy VSTAT image on vCenter
+    include_role:
+      name: common
+      tasks_from: vcenter-deploy-image
+
+  - name: Waiting until VMware tools becomes available
+    connection: local
+    vmware_guest_tools_wait:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      name: "{{ vm_name }}"
+      datacenter: "{{ vcenter.datacenter }}"
+      folder: "{{ vcenter.vmfolder | default(omit) }}"
+      validate_certs: no
+    register: vm_facts
+
+  - debug: var=vm_facts verbosity=1
+
+  - name: Set VM UUID
+    set_fact:
+      uuid: "{{ vm_facts.instance.hw_product_uuid }}"
+
+  - debug: var=uuid
+
+  - name: Turn on autostart
+    connection: local
+    vmware_autostart:
+      name: "{{ vm_name }}"
+      uuid: "{{ uuid }}"
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      state: enable
+      validate_certs: no
+
+  - name: Setup networking on VSTAT
+    include_role:
+      name: common
+      tasks_from: vcenter-setup-networking
+    vars:
+      vm_username: "{{ vstat_default_username }}"
+      vm_password: "{{ vstat_default_password }}"
+      ifcfg_eth0_contents: "{{ lookup('template', 'ifcfg-eth0.j2') }}"
+      skip_hostname: False
+
+  - name: Get the public key for the current user
+    command: cat "{{ user_ssh_pub_key }}"
+    delegate_to: localhost
+    changed_when: False
+    register: current_user_ssh_key
+
+  - name: Inject SSH keys onto VSTAT
+    include_role:
+      name: common
+      tasks_from: vcenter-inject-ssh-keys
+    vars:
+      vm_username: "{{ vstat_default_username }}"
+      vm_password: "{{ vstat_default_password }}"
+
+  - name: Restart Network services in the VM
+    connection: local
+    vmware_vm_shell:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      datacenter: "{{ vcenter.datacenter }}"
+      cluster: "{{ vcenter.cluster }}"
+      validate_certs: no
+      vm_id: "{{ vm_name }}"
+      vm_username: "{{ vstat_default_username }}"
+      vm_password: "{{ vstat_default_password }}"
+      vm_shell: "/sbin/service"
+      vm_shell_args: " network restart"
+
+  - name: Disable cloud-init on the VM
+    connection: local
+    vmware_vm_shell:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      datacenter: "{{ vcenter.datacenter }}"
+      cluster: "{{ vcenter.cluster }}"
+      validate_certs: no
+      vm_id: "{{ vm_name }}"
+      vm_username: "{{ vstat_default_username }}"
+      vm_password: "{{ vstat_default_password }}"
+      vm_shell: "/bin/touch"
+      vm_shell_args: " /etc/cloud/cloud-init.disabled"
+
+
+  when: not node_present

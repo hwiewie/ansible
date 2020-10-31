@@ -1,0 +1,18 @@
+---
+- name: 'Check mandatory variables are defined'
+  assert:
+    that:
+      - stack_name is defined
+      - stack_dir is defined
+
+  # Have to tweak the path so the scripts can find the 'ip' binary
+- name: "Running migration on '{{ stack_name }}' in {{ stack_dir }}. This may take a LONG time!! You can ssh on to the host and tail the migrate log to see progress."
+  shell: "export PATH=$PATH:/usr/sbin; ./migrate.sh -m"
+  args:
+    chdir: "{{ stack_dir }}"
+    executable: "/bin/bash"
+  register: _migrate_info
+
+- name: "Show migrate log output"
+  debug:
+    var: _migrate_info.stdout

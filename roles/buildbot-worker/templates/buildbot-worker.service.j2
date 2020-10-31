@@ -1,0 +1,13 @@
+[Unit]
+Description=BuildBot worker
+After=network.target
+
+[Service]
+User={{ buildbot_worker_user }}
+Group={{ buildbot_worker_user }}
+WorkingDirectory={{ buildbot_worker_dir }}
+ExecStart={{ buildbot_worker_sandbox }}/bin/buildbot-worker start --nodaemon
+LimitNOFILE=16384
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,30 @@
+- block:
+  - include_role:
+      name: common
+      tasks_from: get-vsd-version
+  - include_role:
+      name: common
+      tasks_from: get-vsd-build
+
+  - name: Disable stats collection on all VSD nodes
+    command: /opt/vsd/vsd-stats.sh -d
+    environment:
+      VSD_VERSION: "{{ vsd_version.stdout }}"
+      VSD_BUILD: "{{ vsd_build.stdout }}"
+
+  - name: Get jboss status of all VSDs
+    command: monit status jboss
+    register: jboss_status
+    changed_when: False
+
+  - name: Verify jboss is active for all VSDs
+    assert:
+      that: "{{ jboss_status.rc }} == 0 or
+              {{ jboss_status.stdout is search('Running') }}"
+      msg: "JBoss is not on VSD"
+
+  delegate_to: "{{ vsd }}"
+  remote_user: "{{ hostvars[vsd].vsd_custom_username | default(vsd_custom_username | default(vsd_default_username)) }}"
+  become: "{{ 'no' if hostvars[vsd].vsd_custom_username | default(vsd_custom_username | default(vsd_default_username)) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ hostvars[vsd].vsd_custom_password | default(vsd_custom_password | default(vsd_default_password)) }}"

@@ -1,0 +1,9 @@
+---
+- name: include backup task list      
+  import_tasks: backup.yaml
+  tags: backup
+
+- name: include templates to keep task list 
+  import_tasks: keep.yaml
+  tags: keep
+

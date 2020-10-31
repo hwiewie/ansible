@@ -1,0 +1,89 @@
+- name: Setup KVM on target server
+  include_role:
+    name: common
+    tasks_from: setup-kvm
+
+- name: Set fact for VM already running
+  set_fact:
+    node_running: "{{ vmname in virt_vms.list_vms }}"
+
+- block:
+
+  - include_role:
+      name: common
+      tasks_from: retrieve-kvm-image
+
+  - name: Set locak variable with nsgv destination
+    set_fact:
+      nsgv_dest: "{{ images_path }}/{{ vm_name }}/{{ image_file_name }}"
+
+  when: not node_running
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"
+
+- block:
+
+  - name: Create local temp directory
+    tempfile:
+      state: directory
+      path: "{{ lookup('env', 'TMPDIR') | default('/tmp/', true) }}"
+    delegate_to: localhost
+    register: mktemp_output
+
+  - name: Generate ISO file
+    create_zfb_profile:
+      nsgv_path: "{{ mktemp_output.path }}"
+      fact_name: nsgv_already_configured
+      vsd_license_file: "{{ vsd_license_file }}"
+      vsd_auth: "{{ vsd_auth }}"
+      zfb_constants: "{{ zfb_constants }}"
+      zfb_proxy_user: "{{ zfb_proxy_user }}"
+      zfb_nsg: "{{ zfb_nsg }}"
+      zfb_ports: "{{ zfb_ports }}"
+      zfb_nsg_infra: "{{ zfb_nsg_infra }}"
+      zfb_vsc_infra: "{{ zfb_vsc_infra }}"
+    delegate_to: localhost
+
+  - name: Ensure NSGV has the correct configuration
+    assert:
+      that: "not node_running or nsgv_already_configured"
+      msg: "NSGV is already running, but there was no corresponding configuration for it."
+
+  - name: Copy the ISO image to virt images directory
+    copy: src="{{ mktemp_output.path }}/user_image.iso"
+          dest={{ images_path }}/{{ vmname }}
+          owner={{ libvirt.user }}
+          group={{ libvirt.group }}
+    delegate_to: "{{ target_server }}"
+    remote_user: "{{ target_server_username }}"
+    become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"
+
+  when: bootstrap_method is match('zfb_metro')
+
+- name: Display if skipping NSGV predeploy
+  debug:
+    msg:
+      - "*****************************************************"
+      - "Skipping NSGV predeploy because it is already present"
+      - "*****************************************************"
+  when: node_running
+
+- block:
+
+  - name: Preallocate most of NSGV disk space to avoid pausing the VM, this also checks disk space
+    command: "fallocate -x -l {{ nsgv_allocate_size_gb }}G {{ nsgv_dest }}"
+    when: nsgv_allocate_size_gb > 0
+
+  - name: Define and start VSD VM
+    include_role:
+      name: common
+      tasks_from: kvm-start-vm
+    vars:
+      vm_xml: "{{ lookup('template', 'nsgv.xml.j2') }}"
+      autostart_enabled: true
+
+  when: not node_running
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"

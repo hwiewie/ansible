@@ -1,0 +1,45 @@
+---
+- name: install cache-purge nginx module
+  package: name=libnginx-mod-http-cache-purge 
+
+- name: create cache directories
+  file:
+    path: "/var/cache/nginx/{{ item.key }}"
+    state: directory
+    owner: www-data
+    group: www-data
+  with_dict: "{{ nginx_proxy_caches }}"
+  when: nginx_proxy_caches is defined
+
+- name: install conf.d files
+  template:
+    src: "conf.d/{{ item }}.j2"
+    dest: "/etc/nginx/conf.d/{{ item }}"
+  loop:
+    - proxy_cache.conf
+
+- name: install default.d files
+  template:
+    src: "default.d/{{ item }}.j2"
+    dest: "/etc/nginx/default.d/{{ item }}"
+  loop:
+    - api.conf
+    - buildbot.conf
+    - repo.conf
+    - stats.conf
+    - webroot.conf
+  notify:
+   - reload nginx
+
+- name: install conf.d files
+  template:
+    src: "conf.d/{{ item }}.j2"
+    dest: "/etc/nginx/conf.d/{{ item }}"
+  loop:
+    - prerender.conf
+    - hostname.conf
+    - dl.conf
+    - flathub.conf
+    - flatpak.conf
+  notify:
+   - reload nginx

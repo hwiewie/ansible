@@ -1,0 +1,120 @@
+---
+# tasks file for build_stroom_source
+
+- name: 'Check mandatory variables are defined'
+  assert:
+    that:
+      - gradle_args is defined
+      - gradle_java_home_path is defined
+      - java_version is defined
+      - repo_name is defined
+      - stroom_config_dir is defined
+      - source_git_tag_or_hash is defined
+
+- debug:
+    msg:
+      - "gradle_args: {{ gradle_args }}"
+      - "gradle_java_home_path: {{ gradle_java_home_path }}"
+      - "java_version: {{ java_version }}"
+      - "repo_name: {{ repo_name }}"
+      - "source_dir: {{ source_dir }}"
+      - "stroom_config_dir: {{ stroom_config_dir }}"
+      - "source_git_tag_or_hash: {{ source_git_tag_or_hash }}"
+    verbosity: 2
+
+- name: Ensure '{{ stroom_config_dir}}' is absent
+  become: true
+  file:
+    path: "{{ stroom_config_dir }}"
+    state: absent
+
+- name: "Ensure downloads directory {{ downloads_dir }} exists"
+  file:
+    path: "{{ downloads_dir }}"
+    state: directory
+
+- name: "Clone repo {{ git_repo }} at {{ source_git_tag_or_hash }} into {{ source_dir }}"
+  git:
+    repo: "{{ git_repo }}"
+    dest: "{{ source_dir }}"
+    version: "{{ source_git_tag_or_hash }}"
+
+- stat:
+    path: "{{ source_dir }}"
+  register: source_dir_info
+
+- name: 'Check source dir {{ source_dir }} exists'
+  assert:
+    that:
+      - source_dir_info.stat.exists == true
+
+- name: Check Java home dir exists
+  stat:
+    path: "{{ gradle_java_home_path }}"
+  register: java_home_dir_info
+
+- fail:
+    msg: "Java home {{ gradle_java_home_path }} doesn't exist"
+  when: (java_home_dir_info.stat.isDir is defined and java_home_dir_info.stat.isDir==true) or (java_home_dir_info.stat.isLnk is defined and java_home_dir_info.stat.isLnk==true)
+
+
+
+  # Generate a local stroom.conf for stroom 6
+- name: "Check if {{ stroom_conf_script_file }} exists"
+  stat:
+    path: "{{ stroom_conf_script_file }}"
+  register: stroom_conf_script_info
+
+- name: "Generate {{ stroom_conf_file }}"
+  command: "./{{ stroom_conf_script_filename }}"
+  args:
+    chdir: "{{ source_dir }}"
+    # Stop it building if it has already been created
+    creates: "{{ stroom_conf_file }}"
+  when: stroom_conf_script_info.stat.exists
+
+
+
+  # Generate a local stroom.conf for stroom 7
+- name: "Check if {{ local_yaml_script_file }} exists"
+  stat:
+    path: "{{ local_yaml_script_file }}"
+  register: local_yaml_script_info
+
+- name: "Generate {{ local_yaml_file }}"
+  command: "./{{ local_yaml_script_filename }}"
+  args:
+    chdir: "{{ source_dir }}"
+    # Stop it building if it has already been created
+    creates: "{{ local_yaml_file }}"
+  when: local_yaml_script_info.stat.exists
+
+
+
+- name: "Run gradle clean"
+  # Need to not use daemon as it causes problems with molecule
+  # Force the jdk location in case we have multiple
+  # TODO the wrapper needs internet access to download the appropriate gradle version
+  # -q to only output errors, any stdout and log4j that is part of running the app
+  # plain console to stop all the dynamic output that doesn't sit well with ansible
+  shell: "JAVA_HOME={{ gradle_java_home_path }} ./gradlew -q --console=plain -Dorg.gradle.java.home={{ gradle_java_home_path }} --no-daemon clean"
+  args:
+    chdir: "{{ source_dir }}"
+    # Stop it building if the build dir exists
+    #creates: "stroom-app/build"
+  tags:
+    - never
+    - clean_compiled
+
+- name: "Run gradle task(s) {{ gradle_args }}"
+  # Need to not use daemon as it causes problems with molecule
+  # Force the jdk location in case we have multiple
+  # TODO the wrapper needs internet access to download the appropriate gradle version
+  # -q to only output errors, any stdout and log4j that is part of running the app
+  # plain console to stop all the dynamic output that doesn't sit well with ansible
+  shell: "JAVA_HOME={{ gradle_java_home_path }} ./gradlew -q --console=plain -Dorg.gradle.java.home={{ gradle_java_home_path }} --no-daemon {{ gradle_args }}"
+  args:
+    chdir: "{{ source_dir }}"
+    # Stop it building if the build dir exists
+    creates: "stroom-app/build"
+  register: _build_info

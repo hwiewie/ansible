@@ -1,0 +1,120 @@
+# *** WARNING ***
+# This is a generated file. Manual changes to this file
+# will be lost if reset-build or build is run
+#
+{% if is_vcin is defined %}
+component_type: vcin
+{% else %}
+component_type: vsd
+{% endif %}
+
+required_bridges:
+  - mgmt
+
+target_server_type: {{ item.target_server_type | default('kvm') }}
+hostname: {{ item.hostname }}
+
+{% if item.target_server_type is match("kvm") or item.target_server_type is match("vcenter") %}
+target_server: {{ item.target_server }}
+{% endif %}
+
+{% if item.vmname is defined %}
+vmname: {{ item.vmname }}
+{% else %}
+vmname: {{ item.hostname }}
+{% endif %}
+
+{% if disable_vcin_ha is defined and disable_vcin_ha %}
+
+vcin_mode: true
+vsd_sa_or_ha: sa
+{% if item.master_vcin is defined %}
+master_vcin: {{ item.master_vcin }}
+{% endif %}
+
+{% else %}
+
+{% if vsds|length == 1%}
+vsd_sa_or_ha: sa
+{% else %}
+vsd_sa_or_ha: ha
+{% endif %}
+
+{% if vsds|length == 6%}
+vsd_standby: true
+{% endif %}
+
+{% endif %}
+
+{% if item.cpuset is defined %}
+cpuset:
+{% for cpus in item.cpuset %}
+  - {{ cpus }}
+{% endfor %}
+{% endif %}
+
+health_monitoring_agent: {{ item.health_monitoring_agent | default("none") }}
+
+mgmt_ip: {{ item.mgmt_ip }}
+mgmt_prefix: {{ item.mgmt_ip_prefix }}
+mgmt_gateway: {{ item.mgmt_gateway }}
+
+{% if item.mgmt_ip | ipv6 != False %}
+enable_ipv6: true
+{% endif %}
+
+{% if item.mgmt_bridge is defined %}
+mgmt_bridge: {{ item.mgmt_bridge }}
+{% endif %}
+
+image_path: {{ image_path | default("MISSING") }}
+image_file_name: {{ image_file_name | default("MISSING") }}
+
+upgrade_vmname: {{ item.upgrade_vmname is defined | ternary( item.upgrade_vmname, [ item.vmname | default(item.hostname), "new" ] | join('-') ) }}
+
+{% if vsd_migration_iso_path is defined %}
+vsd_migration_iso_path:  {{ vsd_migration_iso_path }}
+{% endif %}
+{% if vsd_migration_iso_file_name is defined %}
+vsd_migration_iso_file_name: {{ vsd_migration_iso_file_name }}
+{% endif %}
+
+{% if creds is defined and creds.vsd_custom_username is defined %}
+vsd_custom_username: {{ creds.vsd_custom_username | indent(8, False) }}
+{% elif encrypted.vsd_custom_username is defined %}
+vsd_custom_username: {{ encrypted.vsd_custom_username | indent(8, False) }}
+{% endif %}
+{% if creds is defined and creds.vsd_custom_password is defined %}
+vsd_custom_password: {{ creds.vsd_custom_password | indent(8, False) }}
+{% elif encrypted.vsd_custom_password is defined %}
+vsd_custom_password: {{ encrypted.vsd_custom_password | indent(8, False) }}
+{% endif %}
+
+# VSD Post install hardening
+{% if item.failed_login_attempts is defined %}
+failed_login_attempts: {{ item.failed_login_attempts }}
+{% endif %}
+
+{% if item.failed_login_lockout_time is defined %}
+failed_login_lockout_time: {{ item.failed_login_lockout_time }}
+{% endif %}
+
+{% if item.advanced_api_access_logging is defined %}
+advanced_api_access_logging: {{ item.advanced_api_access_logging }}
+{% endif %}
+
+{% if item.tls_version is defined %}
+tls_version: {{ item.tls_version }}
+{% endif %}
+
+{% if item.ca_certificate_path is defined %}
+ca_certificate_path: {{ item.ca_certificate_path }}
+{% endif %}
+
+{% if item.intermediate_certificate_path is defined %}
+intermediate_certificate_path: {{ item.intermediate_certificate_path }}
+{% endif %}
+
+{% if item.certificate_path is defined %}
+certificate_path: {{ item.certificate_path }}
+{% endif %}

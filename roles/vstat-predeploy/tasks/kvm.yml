@@ -1,0 +1,135 @@
+---
+- name: Set local variable with upgrade status
+  set_fact:
+    upgrade: "{{ nuage_upgrade|default('False') }}"
+
+- block:
+
+  - name: Verify that upgrade_vmname is defined if this is an upgrade
+    assert:
+      that: "upgrade_vmname is defined"
+      msg: "upgrade_vmname is required for upgrade"
+  - name: Set local variable with upgrade_vmname
+    set_fact:
+      vm_name: "{{ upgrade_vmname }}"
+
+  when: upgrade
+
+- name: Set local variable with vmname
+  set_fact:
+    vm_name: "{{ vmname }}"
+  when: not upgrade
+
+- name: Setup KVM on target server
+  include_role:
+    name: common
+    tasks_from: setup-kvm
+
+- include_role:
+    name: check-node-running
+
+- name: Display if skipping predeploy
+  debug:
+    msg:
+      - "****************************************************"
+      - "Skipping VSTAT predeploy because it is already present"
+      - "****************************************************"
+  when: node_present
+
+- block:
+
+  - import_tasks: kvm_add_extra_disk.yml
+
+  - include_role:
+      name: common
+      tasks_from: retrieve-kvm-image
+
+  - name: Set local variable with vsd guestfish destination
+    set_fact:
+      guestfish_dest: "{{ images_path }}/{{ vm_name }}/{{ image_file_name }}"
+
+  - name: Get the public key for the current user
+    command: cat "{{ user_ssh_pub_key }}"
+    delegate_to: localhost
+    changed_when: False
+    register: current_user_ssh_key
+
+  - name: Enable IPv6 in qcow image
+    command: virt-edit -a {{ guestfish_dest }} /etc/sysctl.conf -e s/net.ipv6.conf.all.disable_ipv6=1/net.ipv6.conf.all.disable_ipv6=0/
+    when: enable_ipv6 | default(False)
+
+  - name: Get guestfish mount for qcow2
+    include_role:
+      name: common
+      tasks_from: get-guestfish-mount
+    vars:
+      guestfish_qcow2_path: "{{ guestfish_dest }}"
+
+  - name: Verify that mount was found
+    assert:
+      that: "guestfish_mount is defined"
+      msg: "guestfish mount point was not found. Are you using the correct qcow2 file?"
+
+  - name: Create a temporary copy of the network script for eth0
+    template:
+      src: ifcfg-eth0.j2
+      backup: no
+      dest: "{{ images_path }}/{{ vm_name }}/ifcfg-eth0"
+
+  - name: Inject ifcfg-eth0 into VSTAT qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: ifcfg-eth0
+      dest_path: /etc/sysconfig/network-scripts
+
+  - name: Create a temporary copy of the syscfg network file
+    template:
+      src: "{{ role_path }}/../common/templates/network.j2"
+      dest: "{{ images_path }}/{{ vm_name }}/network"
+      backup: no
+
+  - name: Inject network into VSTAT qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: network
+      dest_path: /etc/sysconfig
+
+  - name: Create a temporary copy of the hostname file (for VSD version 4.0.R7 and on)
+    template:
+      src: "{{ role_path }}/../common/templates/hostname.j2"
+      backup: no
+      dest: "{{ images_path }}/{{ vm_name }}/hostname"
+
+  - name: Inject hostname into VSTAT qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: hostname
+      dest_path: /etc
+
+  - name: Inject SSH keys into VSTAT qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-ssh-keys
+
+  - name: Preallocate most of VSTAT disk space to avoid pausing the VM, this also checks disk space
+    command: "fallocate -x -l {{ vstat_allocate_size_gb }}G {{ guestfish_dest }}"
+    when: vstat_allocate_size_gb > 0
+
+  - name: Define and start VSD VM
+    include_role:
+      name: common
+      tasks_from: kvm-start-vm
+    vars:
+      vm_xml: "{{ lookup('template', 'vstat.xml.j2') }}"
+      autostart_enabled: true
+
+  when: not node_present
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"

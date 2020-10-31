@@ -1,0 +1,116 @@
+<domain type='kvm'>
+  <name>{{ vmname }}</name>
+  <memory unit='GiB'>{{ nsgv_ram }}</memory>
+  <currentMemory unit='GiB'>{{ nsgv_ram }}</currentMemory>
+  <os>
+    <type arch='x86_64' machine='pc'>hvm</type>
+    <smbios mode='sysinfo'/>
+    <boot dev='hd'/>
+  </os>
+  <sysinfo type='smbios'>
+    <system>
+      <entry name='product'>ovs-ncpe</entry>
+    </system>
+  </sysinfo>
+  <features>
+    <apic/>
+    <acpi/>
+  </features>
+{% if userdisk_path is defined %}
+  <cpu mode='host-passthrough'>
+{% else %}
+  <cpu>
+{% endif %}
+    <topology sockets='1' cores='1' threads='1'/>
+  </cpu>
+  <clock offset='utc'>
+    <timer name='pit' tickpolicy='delay'/>
+    <timer name='rtc' tickpolicy='delay'/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>coredump-destroy</on_crash>
+  <devices>
+    <emulator>{{ libvirt.emulator }}</emulator>
+    <disk type='file' device='disk'>
+      <driver name='qemu' type='qcow2'/>
+      <source file='{{ images_path }}/{{ vmname }}/{{ image_file_name }}'/>
+      <target dev='hda' bus='ide'/>
+      <address type='drive' controller='0' bus='0' target='0' unit='0'/>
+    </disk>
+{% if userdisk_path is defined %}
+    <disk type='file' device='disk'>
+        <driver name='qemu' type='qcow2' cache='none'/>
+        <source file='{{ userdisk_path }}'/>
+        <target dev='vdb' bus="ide"/>
+        <address type='drive' controller='0' bus='0' target='0' unit='1'/>
+    </disk>
+{% endif %}
+{% if bootstrap_method == 'zfb_metro' or bootstrap_method == 'zfb_external' %}
+    <disk type='file' device='cdrom'>
+      <driver name='qemu' type='raw'/>
+{% if bootstrap_method == 'zfb_metro' %}
+      <source file='{{ images_path }}/{{ vmname }}/user_image.iso'/>
+{% endif %}
+{% if bootstrap_method == 'zfb_external' %}
+      <source file='{{ iso_path }}/{{ iso_file }}'/>
+{% endif %}
+      <backingStore/>
+      <target dev='hdb' bus='ide'/>
+      <readonly/>
+      <address type='drive' controller='0' bus='1' target='0' unit='0'/>
+    </disk>
+{% endif %}
+    <controller type='usb' index='0'>
+      <alias name='usb0'/>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x01' function='0x2'/>
+    </controller>
+    <interface type='bridge'>
+      <source bridge='{{ data_bridge }}'/>
+{% if nsgv_mac is defined %}
+      <mac address='{{ nsgv_mac }}'/>
+{% endif %}
+      <target dev='vnet0'/>
+      <model type='virtio'/>
+    </interface>
+{% if access_bridge is defined and access_bridges is undefined %}
+    <interface type='bridge'>
+      <source bridge='{{ access_bridge }}'/>
+      <target dev='vnet1'/>
+      <model type='virtio'/>
+    </interface>
+{% endif %}
+{% if access_bridges is defined %}
+{% for bridge in access_bridges %}
+    <interface type='bridge'>
+      <source bridge='{{ bridge }}'/>
+      <target dev='vnet{{ loop.index }}'/>
+      <model type='virtio'/>
+    </interface>
+{% endfor %}
+{% endif %}
+{% if telnet_port is defined %}
+    <serial type='tcp'>
+     <source mode='bind' host='0.0.0.0' service='{{telnet_port}}'/>
+     <protocol type='telnet'/>
+     <target port='0'/>
+     <alias name='serial0'/>
+    </serial>
+    <console type='tcp'>
+     <source mode='bind' host='0.0.0.0' service='{{telnet_port}}'/>
+     <protocol type='telnet'/>
+      <alias name='serial0'/>
+    </console>
+{% else %}
+    <console type='pty' tty='/dev/pts/16'>
+      <source path='/dev/pts/16'/>
+      <target type='serial' port='0'/>
+      <alias name='serial0'/>
+    </console>
+{% endif %}
+    <memballoon model='virtio'>
+      <address type='pci' domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+    </memballoon>
+  </devices>
+  <seclabel type='none'/>
+</domain>

@@ -1,0 +1,91 @@
+---
+- name: add flatpak ppa
+  apt_repository:
+    repo: ppa:alexlarsson/flatpak
+    update_cache: yes
+
+- name: install buildbot packages (deb)
+  package:
+    name:
+      - appstream-util
+      - build-essential
+      - bzr
+      - elfutils
+      - gcc # Needed for installing twisted
+      - git
+      - python3-dev
+      - python3-pip
+      - subversion
+      - virtualenv
+      - flatpak-builder
+      - python-setuptools
+      - git-lfs
+    state: latest
+
+- name: create buildbot user
+  user:
+    name: "{{ buildbot_worker_user }}"
+    home: "{{ buildbot_worker_home }}"
+    system: yes
+
+- name: install pip and buildbot-worker in virtualenv
+  pip:
+    name:
+      - buildbot-worker
+      - pip
+    state: latest
+    virtualenv: "{{ buildbot_worker_sandbox }}"
+    virtualenv_python: python3
+  with_items:
+   - pip
+   - buildbot-worker
+  become: true
+  become_user: "{{ buildbot_worker_user }}"
+
+- name: create directories for worker configuration
+  file:
+    path: "{{ item }}"
+    state: directory
+  become: true
+  become_user: "{{ buildbot_worker_user }}"
+  with_items:
+    - "{{ buildbot_worker_dir }}"
+    - "{{ buildbot_worker_dir }}/info"
+
+- name: configure worker
+  template:
+    src: buildbot.tac.j2
+    dest: "{{ buildbot_worker_dir }}/buildbot.tac"
+  notify:
+   - restart buildbot-worker
+
+- name: set admin info
+  copy:
+    content: '{{ buildbot_worker_admin }}'
+    dest: "{{ buildbot_worker_dir }}/info/admin"
+
+- name: set host info
+  copy:
+    content: '{{ buildbot_worker_description }}'
+    dest: "{{ buildbot_worker_dir }}/info/host"
+
+- name: add systemd unit
+  template:
+    src: buildbot-worker.service.j2
+    dest: /etc/systemd/system/buildbot-worker.service
+  notify:
+   - restart buildbot-worker
+
+- name: enable and start worker
+  systemd:
+    name: buildbot-worker
+    daemon_reload: yes
+    enabled: yes
+    state: started
+  notify:
+   - restart buildbot-worker
+
+- name: configure git
+  template:
+    src: gitconfig.j2
+    dest: "{{ buildbot_worker_home }}/.gitconfig"

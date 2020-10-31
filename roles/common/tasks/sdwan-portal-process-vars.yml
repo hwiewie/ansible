@@ -1,0 +1,37 @@
+- name: Set SD-WAN Portal OS QCOW2 location
+  include_role:
+    name: common
+    tasks_from: find-file.yml
+  vars:
+    dir_name: "{{ nuage_unzipped_files_dir }}"
+    pattern: "CentOS-7-x86_64-*.qcow2"
+
+- name: Register SD-WAN Portal OS QCOW2 variables with proper path and image locations for use in other playbooks
+  set_fact:
+    image_path: "{{ file_path }}"
+    image_file_name: "{{ file_name }}"
+
+- name: Set Portal SW package location
+  include_role:
+    name: common
+    tasks_from: find-file.yml
+  vars:
+    dir_name: "{{ nuage_unzipped_files_dir }}"
+    pattern: "nuage-portal-container*"
+
+- name: Register SD-WAN PORTAL variable with proper path and image locations for use in other playbooks
+  set_fact:
+    portal_path: "{{ file_path }}"
+    portal_file_name: "{{ file_name }}"
+
+- name: Set portal_check
+  set_fact: portal_check={{ portals is defined }}
+
+- name: Assign empty list to myportals if it is undefined
+  set_fact: portals= default([])
+  when: not portal_check
+
+- name: Create host_vars files for sdwan portal
+  template: src=sdwan_portal.j2 backup=no dest={{ inventory_dir }}/host_vars/{{ item.hostname }}
+  with_items: "{{ portals }}"
+  when: portal_check

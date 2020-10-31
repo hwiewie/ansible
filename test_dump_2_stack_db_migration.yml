@@ -1,0 +1,140 @@
+---
+########### LOCALHOST  ###########
+
+- name: Verify local_config_dir is set up
+  import_playbook: ./verify_local_config_dir_exists.yml
+
+################### SETUP HOST(S) ###################
+
+- name: Setup stroom hosts
+  import_playbook: ./setup_stroom_hosts.yml
+  tags:
+    - setup
+        
+- hosts:
+    - all
+  gather_facts: true # Needed for yum stuff
+  become: true
+  become_user: "{{ stroom_user }}"
+  vars:
+    - stack_dir_from: "{{ migration_dir }}/stack-{{ stroom_version_from }}"
+    - stack_dir_to: "{{ migration_dir }}/stack-{{ stroom_version_to }}"
+  tasks:
+
+    ################### TEAR DOWN ###################
+
+      # Remove the docker containers
+    - import_role:
+        name: stack/delete
+      vars:
+        stack_version: "{{ stroom_version_from }}"
+        stack_install_root_dir: "{{ stack_dir_from }}"
+      tags:
+        - teardown
+
+    - import_role:
+        name: stack/delete
+      vars:
+        stack_version: "{{ stroom_version_to }}"
+        stack_install_root_dir: "{{ stack_dir_to }}"
+      tags:
+        - teardown
+
+      # Remove the from stack dir
+    - name: Ensure '{{ stack_dir_from }}' is absent
+      file:
+        path: "{{ stack_dir_from }}"
+        state: absent
+      tags:
+        - teardown
+
+      # Remove the to stack dir
+    - name: Ensure '{{ stack_dir_to }}' is absent
+      file:
+        path: "{{ stack_dir_to }}"
+        state: absent
+      tags:
+        - teardown
+
+    - name: Ensure '{{ migration_dir}}' is absent
+      file:
+        path: "{{ migration_dir }}"
+        state: absent
+      tags:
+        - never
+        - clean_compiled
+        - teardown
+
+
+    ################### SET UP & RUN FROM VERSION ###################
+
+    - import_role:
+        name: stack/deploy
+      vars:
+        stack_version: "{{ stroom_version_from }}"
+        stack_install_root_dir: "{{ stack_dir_from }}"
+
+      # Change the stack so we only run up the DB.
+      # If we run up the whole stack it will build the DBs
+      # which we don't want.
+    - import_role:
+        name: stack/set_active_services
+      vars:
+        stack_install_root_dir: "{{ stack_dir_from }}"
+        stack_version: "{{ stroom_version_from }}"
+        services_to_run: "stroom-all-dbs"
+
+      # Start up the active services, i.e. the DB
+    - import_role:
+        name: stack/ensure_state
+      vars:
+        stack_install_root_dir: "{{ stack_dir_from }}"
+        stack_version: "{{ stroom_version_from }}"
+        state: "started"
+
+    - import_role:
+        name: stack/import_dump
+      vars:
+        stack_install_root_dir: "{{ stack_dir_from }}"
+      tags:
+        - import_dump
+
+      # Stop the stack
+    - import_role:
+        name: stack/ensure_state
+      vars:
+        stack_install_root_dir: "{{ stack_dir_from }}"
+        stack_version: "{{ stroom_version_from }}"
+        state: "stopped"
+
+    ################### SET UP & RUN TO VERSION ###################
+
+    - import_role:
+        name: stack/deploy
+      vars:
+        stack_version: "{{ stroom_version_to }}"
+        stack_install_root_dir: "{{ stack_dir_to }}"
+
+      # Run the DB migratino as a foreground process, could take ages.
+      # This will start up the DB and stroom (in migrate mode) as required
+    - import_role:
+        name: stack/migrate
+      vars:
+        stack_install_root_dir: "{{ stack_dir_to }}"
+        stack_version: "{{ stroom_version_to }}"
+      tags:
+        - migrate_stack
+
+      # If the migration fails, the logs can also be found in the logs dir
+      # of the stack
+
+      # Start up the stack so we can test the app
+    - import_role:
+        name: stack/ensure_state
+      vars:
+        stack_install_root_dir: "{{ stack_dir_to }}"
+        stack_version: "{{ stroom_version_to }}"
+        state: "started"
+      tags:
+        - start_stack
+

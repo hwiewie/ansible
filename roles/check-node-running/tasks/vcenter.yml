@@ -1,0 +1,79 @@
+
+- name: Finding VM folder (ignoring errors)
+  connection: local
+  vmware_guest_find:
+    hostname: "{{ target_server }}"
+    username: "{{ vcenter.username }}"
+    password: "{{ vcenter.password }}"
+    name: "{{ vm_name }}"
+    validate_certs: no
+  register: vm_folder
+  ignore_errors: yes
+
+- name: Check error message from vmware guest find
+  assert:
+    that: vm_folder is succeeded or "Unable to find" in vm_folder.msg
+    fail_msg: "Unexpected error from vmware guest find:\n{{ vm_folder.msg | default('') }}"
+
+- name: Gathering info on VM
+  connection: local
+  vmware_guest_info:
+    hostname: "{{ target_server }}"
+    username: "{{ vcenter.username }}"
+    password: "{{ vcenter.password }}"
+    datacenter: "{{ vcenter.datacenter }}"
+    folder: "/{{ vcenter.datacenter }}{{ vm_folder['folders'][0] }}"
+    name: "{{ vm_name }}"
+    validate_certs: no
+  register: vm_facts
+  when: vm_folder is succeeded
+
+- debug: var=vm_facts verbosity=1
+
+- block:
+  - name: Get VSD directory if present (ignoring errors)
+    connection: local
+    vmware_vm_shell:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      datacenter: "{{ vcenter.datacenter }}"
+      cluster: "{{ vcenter.cluster }}"
+      validate_certs: no
+      vm_id: "{{ vm_name }}"
+      vm_username: "{{ vsd_default_username }}"
+      vm_password: "{{ vsd_default_password }}"
+      vm_shell: "/usr/bin/echo"
+      vm_shell_cwd: "/opt/vsd/"
+      vm_shell_args: "0"
+    ignore_errors: yes
+    register: vsd_dir
+
+  - name: Set node present for vcenter interfaces disabled
+    set_fact:
+      node_present: "{{ vsd_dir is succeeded }}"
+
+  - name: Set node present for vcenter interfaces disabled
+    set_fact:
+      do_reachability_checks: False
+
+  when:
+    - vcenter_start_vsd_with_interfaces_disabled | default ( False )
+    - nuage_upgrade | default (False)
+    - inventory_hostname in groups['vsds']
+
+- block:
+  - name: Verify that the VM is not running if not reachable
+    assert:
+      that: "not (vm_folder is succeeded and vm_facts is succeeded and not node_reachable)"
+      msg: "{{ vm_name }} is running on {{ target_server }} but is not reachable. Quitting."
+
+  - name: Verify that the VM is running if reachable
+    assert:
+      that: "not (vm_folder is failed and node_reachable)"
+      msg: "{{ vm_name }} is not running on {{ target_server }} but the address is reachable. Quitting."
+  when: do_reachability_checks | default('True')
+
+- name: Set fact for node running
+  set_fact:
+    node_running: "{{ vm_folder is succeeded and vm_facts is succeeded }}"

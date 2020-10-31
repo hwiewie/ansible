@@ -1,0 +1,34 @@
+---
+- hosts: vstats
+  gather_facts: no
+  pre_tasks:
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+
+    - name: Set major minor version
+      include_role:
+        name: common
+        tasks_from: set-major-minor-versions
+
+    - name: Lets run VSTAT upgrade wrapup hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vstat_upgrade_wrapup
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vstat-upgrade-wrapup
+  vars:
+    vstat_username: "{{ vstat_custom_username | default(vstat_default_username) }}"
+    vstat_password: "{{ vstat_custom_password | default(vstat_default_password) }}"

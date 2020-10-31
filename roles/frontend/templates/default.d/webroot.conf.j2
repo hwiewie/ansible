@@ -1,0 +1,24 @@
+location / {
+    proxy_cache webapps;
+    proxy_cache_background_update on;
+    proxy_cache_lock on;
+
+    proxy_cache_valid 200 302 10m;
+    proxy_cache_valid 301      1h;
+
+    proxy_intercept_errors on;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Prerender-Token {{ frontend_prerender_token }};
+
+    if ($prerender = 1) {
+        set $prerender "service.prerender.io";
+        proxy_pass http://$prerender/$scheme://$host$request_uri?;
+    }
+
+    if ($prerender = 0) {
+        proxy_pass https://{{ frontend_nginx_webroot_origin }};
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+    }
+}

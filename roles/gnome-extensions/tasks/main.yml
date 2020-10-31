@@ -1,0 +1,31 @@
+---
+- name: GNOME - Enable universe repository 18.04
+  become: true
+  apt_repository:
+    repo: "{{ item }}"
+  loop:
+    - "deb http://us.archive.ubuntu.com/ubuntu/ bionic universe"
+    - "deb http://us.archive.ubuntu.com/ubuntu/ bionic-updates universe"
+    - "deb http://security.ubuntu.com/ubuntu bionic-security universe"
+  when: ansible_distribution_version == "18.04"
+
+- name: GNOME - Enable universe repository 20.04
+  become: true
+  apt_repository:
+    repo: "{{ item }}"
+  loop:
+    - "deb http://us.archive.ubuntu.com/ubuntu/ focal universe"
+    - "deb http://us.archive.ubuntu.com/ubuntu/ focal-updates universe"
+    - "deb http://security.ubuntu.com/ubuntu focal-security universe"
+  when: ansible_distribution_version == "20.04"
+
+- name: GNOME - apt packages
+  become: true
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - gnome-tweak-tool
+    - chrome-gnome-shell
+    - gnome-shell-extensions
+    - gtk-3-examples

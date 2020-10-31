@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$id": "urn:nuage-metroae:mock_schema",
+    "title": "Schema for MetroAE unit-tests",
+    "description": "A schema for MetroAE unit-tests",
+    "type": "object",
+    "properties": {
+        "username": {
+            "type": "string",
+            "title": "Username",
+            "description": "Username",
+            "default": "",
+            "encrypt": false,
+            "propertyOrder": 10
+        },
+        "password": {
+            "type": "string",
+            "title": "Password",
+            "description": "Password",
+            "default": "",
+            "encrypt": true,
+            "propertyOrder": 20
+        },
+        "ipv4_address": {
+            "type": "string",
+            "title": "IPv4 Address",
+            "description": "IPv4 Address",
+            "format": "ipv4",
+            "encrypt": false,
+            "propertyOrder": 30
+        },
+        "ipv6_address": {
+            "type": "string",
+            "title": "IPv6 Address",
+            "description": "IPv6 Address",
+            "format": "ipv6",
+            "encrypt": false,
+            "propertyOrder": 40
+        }
+    }
+}

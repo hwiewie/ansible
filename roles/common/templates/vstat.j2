@@ -1,0 +1,106 @@
+# *** WARNING ***
+# This is a generated file. Manual changes to this file
+# will be lost if reset-build or build is run
+#
+component_type: vstat
+
+required_bridges:
+  - mgmt
+
+target_server_type: {{ item.target_server_type | default('kvm') }}
+hostname: {{ item.hostname }}
+
+{% if item.target_server_type is match("kvm") or item.target_server_type is match("vcenter") %}
+target_server: {{ item.target_server }}
+{% endif %}
+
+{% if item.vmname is defined %}
+vmname: {{ item.vmname }}
+{% else %}
+vmname: {{ item.hostname }}
+{% endif %}
+
+upgrade_vmname: {{ item.upgrade_vmname is defined | ternary( item.upgrade_vmname, [ item.vmname | default(item.hostname), "new" ] | join('-') ) }}
+mgmt_ip: {{ item.mgmt_ip }}
+mgmt_prefix: {{ item.mgmt_ip_prefix }}
+mgmt_gateway: {{ item.mgmt_gateway }}
+
+{% if item.mgmt_ip | ipv6 != False %}
+enable_ipv6: true
+{% endif %}
+
+enable_vss_ui: {{ item.enable_vss_ui | default(False) }}
+
+{% if item.mgmt_bridge is defined %}
+mgmt_bridge: {{ item.mgmt_bridge }}
+{% endif %}
+
+{% if item.vsd_fqdn is defined %}
+vsd_fqdn: {{ item.vsd_fqdn }}
+{% else %}
+vsd_fqdn: {{ common.vsd_fqdn_global }}
+{% endif %}
+
+{% if (vstats and (vstats| length == 3) or (vstats| length == 6)) %}
+vstat_sa_or_ha: ha
+{% else %}
+vstat_sa_or_ha: sa
+{% endif %}
+
+{% if item.nfs_backup_location is defined %}
+nfs_backup_location: {{ item.nfs_backup_location }}
+{% endif %}
+{% if item.restore_interval is defined %}
+restore_interval: {{ item.restore_interval }}
+{% endif %}
+{% if item.snapshot_interval is defined %}
+snapshot_interval: {{ item.snapshot_interval }}
+{% endif %}
+{% if item.repo_name is defined %}
+repo_name: {{ item.repo_name }}
+{% endif %}
+
+image_path: {{ image_path | default("MISSING") }}
+image_file_name: {{ image_file_name | default("MISSING") }}
+
+{% if item.cpuset is defined %}
+cpuset:
+{% for cpus in item.cpuset %}
+  - {{ cpus }}
+{% endfor %}
+{% endif %}
+
+health_monitoring_agent: {{ item.health_monitoring_agent | default("none") }}
+
+add_extra_disk: {{ item.add_extra_disk | default(False) }}
+{% if item.add_extra_disk | default(False) %}
+extra_disk_image_path: {{ item.extra_disk_image_path | default("/var/lib/libvirt/images") }}
+extra_disk_image: {{ item.extra_disk_image_path | default("/var/lib/libvirt/images") }}/{{ item.extra_disk_image_file_name | default("extra-disk-" + item.hostname) }}.qcow2
+extra_disk_size_gb: {{ item.extra_disk_size_gb | default(1000) }}
+extra_disk_device: vdb
+extra_disk_mount_point: /var/lib/elasticsearch/
+{% endif %}
+
+{% if vstat_nfs_server is defined %}
+vstat_nfs_server_with_folder: {{ vstat_nfs_server }}:{{ vstat_nfs_folder }}
+{% else %}
+vstat_nfs_server_with_folder: 'NONE'
+{% endif %}
+
+{% if vstat_upgrade_scripts_path is defined %}
+vstat_upgrade_scripts_path: {{ vstat_upgrade_scripts_path }}
+{% endif %}
+{% if vstat_upgrade_scripts_file is defined %}
+vstat_upgrade_scripts_file: {{ vstat_upgrade_scripts_file }}
+{% endif %}
+
+{% if creds is defined and creds.vstat_custom_username is defined %}
+vstat_custom_username: {{ creds.vstat_custom_username | indent(8, False) }}
+{% elif encrypted.vstat_custom_username is defined %}
+vstat_custom_username: {{ encrypted.vstat_custom_username | indent(8, False) }}
+{% endif %}
+{% if creds is defined and creds.vstat_custom_password is defined %}
+vstat_custom_password: {{ creds.vstat_custom_password | indent(8, False) }}
+{% elif encrypted.vstat_custom_password is defined %}
+vstat_custom_password: {{ encrypted.vstat_custom_password | indent(8, False) }}
+{% endif %}

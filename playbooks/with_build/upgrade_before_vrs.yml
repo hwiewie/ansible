@@ -1,0 +1,48 @@
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Set fact for backup type
+      set_fact:
+        backup_type: upgrade
+
+- hosts: vsds
+  gather_facts: no
+  tasks:
+    - name: Check if VSD prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vsd_fallocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+- hosts: vscs
+  gather_facts: no
+  tasks:
+    - name: Check if VSC prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vsc_fallocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+- hosts: vstats
+  gather_facts: no
+  tasks:
+    - name: Check if VSTAT prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vstat_allocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+- name: Run VSP Preupgrade Health
+  import_playbook: "vsp_preupgrade_health.yml"
+
+- name: Run Upgrade VSDs
+  import_playbook: "upgrade_vsds.yml"
+
+- name: Run Upgrade VCSs before VRS
+  import_playbook: "upgrade_vscs_before_vrs.yml"

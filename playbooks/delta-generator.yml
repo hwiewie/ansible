@@ -1,0 +1,5 @@
+---
+- name: set up delta-generator
+  hosts: delta_generator
+  roles:
+  - delta-generator

@@ -1,0 +1,167 @@
+---
+################
+# VRS
+################
+
+# TODO: Optimize the looping through vrs arch types in case of large deployments
+- block:
+
+  - name: Create facts to be used with vrs deploy if vrs is Debian 16.04 based
+    set_fact: vrs_u16_04="True"
+    when: item.vrs_os_type == "u16.04"
+    with_items: "{{ vrss }}"
+
+  - name: Create facts to be used with vrs deploy if vrs is Redhat el7 based
+    set_fact: vrs_el7="True"
+    when: item.vrs_os_type == "el7"
+    with_items: "{{ vrss }}"
+
+  - name: initialize vrs_target_os_is_supported to be evaluated for vrs supported target os types
+    set_fact: vrs_target_os_is_supported="True"
+
+  - name: Set facts if vrs os type is set to a supported version
+    set_fact: vrs_target_os_is_supported="False"
+    when: item.vrs_os_type not in supported_vrs_target_os_types
+    with_items: "{{ vrss }}"
+
+  - name: Check if target OS is supported
+    assert:
+      that:
+        - vrs_target_os_is_supported
+      msg: "unsupported OS type/typo in build.yml. Supported OS Types are el7,u16.04"
+
+  - debug: msg="vrs_u16_04 is set to "{{ vrs_u16_04 }}" " verbosity=1
+    when: vrs_u16_04  is defined
+
+  - debug: msg="vrs_el7 is set to "{{ vrs_el7 }}" " verbosity=1
+    when: vrs_el7 is defined
+
+  - block:
+
+    - name: Find name of VRS Package Files (EL7 architecture)
+      find:
+        path: "{{ nuage_unzipped_files_dir }}"
+        use_regex: yes
+        pattern: "nuage-openvswitch-\\d+.*"
+        recurse: yes
+      register: rc_vrs_file_el7
+
+    - debug: var=rc_vrs_file_el7 verbosity=1
+
+    - name: Register VRS package variables with proper path and image locations for use in other playbooks (EL7 architecture)
+      set_fact:
+        vrs_package_path: "{{ rc_vrs_file_el7.files[0].path | dirname }}/"
+        vrs_package_file_name_list: "{{ rc_vrs_file_el7.files |  map(attribute='path') | list | map('basename') | list }}"
+      when: rc_vrs_file_el7.matched > 0
+
+    - name: Register that vrs_package_path is missing
+      set_fact:
+        vrs_package_path: "MISSING"
+        vrs_package_file_name_list: ["MISSING"]
+        missing_image_file: true
+      when: rc_vrs_file_el7.matched <= 0
+
+    - name: Check if any of the VRSs have dkms_install set
+      set_fact: dkms_install = True
+      when: item.dkms_install|default(False)
+      with_items: "{{ vrss }}"
+
+    - block:
+
+      - name: Find name of nuage DKMS Package Files (EL7 architecture)
+        find:
+          path: "{{ nuage_unzipped_files_dir }}"
+          pattern: "nuage-openvswitch-dkms*.rpm"
+          recurse: yes
+        register: rc_dkms_file_el7
+
+      - debug: var=rc_dkms_file_el7 verbosity=1
+
+      - name: Register DKMS package variables with proper path and image locations for use in other playbooks (EL7 architecture)
+        set_fact:
+          el7_dkms_package_path: "{{ rc_dkms_file_el7.files[0].path | dirname }}/"
+          el7_dkms_package_file_name_list: "{{ rc_dkms_file_el7.files |  map(attribute='path') | list | map('basename') | list }}"
+        when: "rc_dkms_file_el7.matched > 0"
+
+      - name: Register DKMS package variables with proper path and image locations for use in other playbooks (EL7 architecture)
+        set_fact:
+          el7_dkms_package_path: "MISSING"
+          el7_dkms_package_file_name_list: ["MISSING"]
+          missing_image_file: true
+        when: "rc_dkms_file_el7.matched <= 0"
+
+      when: dkms_install | default(False)
+
+    - name: Find name of Selinux Package Files (EL7 architecture)
+      find:
+        path: "{{ nuage_unzipped_files_dir }}"
+        pattern: "selinux-policy-nuage-[0-9]*.rpm"
+        recurse: yes
+      register: rc_selinux_file
+
+    - debug: var=rc_selinux_file verbosity=1
+
+    - name: Register Selinux package variables with proper path and image locations for use in other playbooks (EL7 architecture)
+      set_fact:
+        selinux_package_path: "{{ rc_selinux_file.files[0].path | dirname }}/"
+        selinux_package_file_name_list: "{{ rc_selinux_file.files |  map(attribute='path') | list | map('basename') | list }}"
+      when: rc_selinux_file.matched
+
+    when: vrs_el7|default(false)
+
+  - block:
+
+     # Debian requires 3 packages listed in a specific order of dependeny
+      - name: Find name of VRS package files (Debian architecture)
+        find:
+          path: "{{ nuage_unzipped_files_dir }}"
+          patterns:
+            - "nuage-python-openvswitch*.deb"
+            - "nuage-openvswitch-common*.deb"
+            - "nuage-openvswitch-switch*.deb"
+          recurse: yes
+        register: rc_vrs_package_file_u16_04
+
+      - debug: var=rc_vrs_package_file_u16_04 verbosity=1
+
+      - name: Register VRS package path and VRS package file name for use in other playbooks (Debian Architecture)
+        set_fact:
+          vrs_package_path: "{{ rc_vrs_package_file_u16_04.files[0].path | dirname }}/"
+          vrs_package_file_name_list: "{{ rc_vrs_package_file_u16_04.files |  map(attribute='path') | list | map('basename') | list }}"
+        when: "rc_vrs_package_file_u16_04.matched > 0"
+
+      - name: Register that vrs_package_path is missing
+        set_fact:
+          vrs_package_path: "MISSING"
+          vrs_package_file_name_list: ["MISSING"]
+          missing_image_file: true
+        when: "rc_vrs_package_file_u16_04.matched <= 0"
+
+    when: vrs_u16_04|default(false)
+
+  when:
+    - vrss is defined and vrss|length > 0
+
+  tags:
+    - vrs
+
+- block:
+
+  - name: Assert target server password is defined when VRS present and openflow_tls is true
+    assert: {
+      that: "{{ encrypted.target_server_password is defined }}",
+      msg: "Target server password has not been defined in credentials. It is required for configuring TLS secure communication with VRS"
+      }
+    when: openflow_tls | default(True)
+
+  - name: Create host_vars files for vrs
+    include_tasks: write-host-files.yml
+    vars:
+      component_template: vrs
+      component_hostname: "{{ item.1 }}"
+      component: "{{ item.0 }}"
+    with_subelements:
+      - "{{ vrss }}"
+      - vrs_ip_list
+
+  when: vrss is defined and vrss|length > 0

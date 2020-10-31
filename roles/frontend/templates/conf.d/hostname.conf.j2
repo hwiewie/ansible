@@ -1,0 +1,13 @@
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    server_name {{ frontend_nginx_ssl_name }};
+
+    # Load configuration files for the default server block.
+    include /etc/nginx/default.d/*.conf;
+
+    ssl_certificate /var/lib/dehydrated/certs/{{ frontend_nginx_ssl_name }}/fullchain.pem;
+    ssl_certificate_key /var/lib/dehydrated/certs/{{ frontend_nginx_ssl_name }}/privkey.pem;
+    ssl_trusted_certificate /var/lib/dehydrated/certs/{{ frontend_nginx_ssl_name }}/chain.pem;
+}

@@ -1,0 +1,69 @@
+---
+- hosts: vstats
+  gather_facts: no
+  pre_tasks:
+    - name: Check if VSTATs prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vstat_allocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+    - block:
+
+      - name: Check available disk space for VSTAT extra disk if enabled
+        include_role:
+          name: common
+          tasks_from: check-hypervisor-disk-space
+        vars:
+          required_available_space: "{{ extra_disk_size_gb }}"
+          path: "{{ extra_disk_image_path }}"
+
+      delegate_to: "{{ target_server }}"
+      remote_user: "{{ target_server_username }}"
+      when: add_extra_disk | default(False)
+
+    - name: Lets run VSTAT predeploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vstat_predeploy
+          - install_vstats
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vstat-predeploy
+
+- hosts: primary_vstats
+  gather_facts: no
+  pre_tasks:
+    - name: Check if VSTATs prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vstat_allocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+    - name: Lets run VSTAT predeploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vstat_predeploy
+          - install_vstats
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vstat-predeploy
+
+- name: Run VSTAT Standby predeploy
+  import_playbook: "vstat_standby_predeploy.yml"

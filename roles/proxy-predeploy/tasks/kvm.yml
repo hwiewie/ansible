@@ -1,0 +1,163 @@
+---
+- name: Query {{ target_server }} facts
+  action: setup
+  remote_user: "{{ target_server_username }}"
+  delegate_to: "{{ target_server }}"
+
+- name: Check target for supported OS
+  fail: msg="Unsupported OS family ({{ ansible_os_family }})"
+  when: ansible_os_family not in supported_target_server_os_family_list
+
+- name: Include OS-specific variables.
+  include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Set local variable with vmname
+  set_fact:
+    vm_name: "{{ vmname }}"
+
+- block:
+  - name: If RedHat, install packages for RedHat OS family distros
+    yum: name={{ item }} state=present
+    with_items:
+    - qemu-kvm
+    - libvirt
+    - bridge-utils
+    - libvirt-python
+    when: ansible_os_family == "RedHat"
+
+  - name: If Debian, install packages for Debian OS family distros
+    apt: name={{ item }} state=present
+    with_items:
+    - qemu-kvm
+    - libvirt-bin
+    - bridge-utils
+    - python-libvirt
+    when: ansible_os_family == "Debian"
+
+  - name: List the Virtual Machines running
+    virt: command=list_vms
+    register: virt_vms
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+
+- name: Verify that the VM is not already running
+  assert:
+    that: "vmname not in virt_vms.list_vms"
+    msg: "{{ vmname }} is already running on {{ target_server }}"
+
+- name: Set local variable with proxy_vm guestfish destination
+  set_fact:
+      guestfish_dest: "{{ images_path }}/{{ vmname }}/{{ proxy_vm_qcow2_file_name }}"
+
+- block:
+  - name: set skip copy images to default
+    set_fact:
+      skip_copy_images: False
+    when: skip_copy_images is undefined
+
+  - include_role:
+      name: common
+      tasks_from: copy-qcow2.yml
+    vars:
+      qcow2_path: "{{ proxy_vm_qcow2_path }}"
+      qcow2_file_name: "{{ proxy_vm_qcow2_file_name }}"
+    when: not skip_copy_images
+
+  - block:
+    - name: Check to make sure there is an existing qcow image
+      stat:
+        path: "{{ images_path }}/{{ vmname }}/{{ proxy_vm_qcow2_file_name }}"
+      register: statResult
+
+    - name: check the result of image find command
+      assert:
+        that: statResult.stat.exists
+        msg: Missing qcow2 file in {{ images_path }}/{{ vmname }}/{{ proxy_vm_qcow2_file_name }}
+
+    when: skip_copy_images
+
+  - name: Get list of partitions
+    shell: "guestfish -r -a {{ guestfish_dest }} run : list-filesystems | grep -Ev '(unknown|swap)'"
+    register: partitions_list
+
+  - name: Check partition content
+    command: "guestfish -r -a {{ guestfish_dest }} run : mount {{ item.split(':')[0] }} / : ls /"
+    register: partitions
+    with_items: "{{ partitions_list.stdout_lines }}"
+
+  remote_user: "{{ target_server_username }}"
+  delegate_to: "{{ target_server }}"
+
+- name: Find root partition
+  set_fact:
+    guestfish_mount: "{{ item.item.split(':')[0] }}"
+  with_items: "{{ partitions.results }}"
+  when: '"proc" in item.stdout'
+
+- debug: var=guestfish_mount verbosity=1
+
+- name: Get the public key for the current user
+  command: cat "{{ user_ssh_pub_key }}"
+  register: current_user_ssh_key
+  delegate_to: localhost
+
+- block:
+
+  - name: Create a temporary copy of the network script for eth0
+    template:
+      src: ifcfg-eth0.j2
+      backup: no
+      dest: "{{ images_path }}/{{ vmname }}/ifcfg-eth0"
+
+  - name: Inject ifcfg-eth0 into proxy qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: ifcfg-eth0
+      dest_path: /etc/sysconfig/network-scripts
+
+
+  - name: Create a temporary copy of the hostname file
+    template:
+      src: "{{ role_path }}/../common/templates/hostname.j2"
+      backup: no
+      dest: "{{ images_path }}/{{ vmname }}/hostname"
+
+  - name: Inject network into proxy qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: network
+      dest_path: /etc/sysconfig
+
+  - name: "Create a temporary copy of the network script for ifcfg-br0 on {{ target_server }}"
+    template:
+      src: ifcfg-br0.j2
+      backup: no
+      dest: "{{ images_path }}/{{ vmname }}/ifcfg-br0"
+
+  - name: Inject ifcfg-br0 into proxy qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-file
+    vars:
+      dest_file_name: ifcfg-br0
+      dest_path: /etc/sysconfig/network-scripts
+
+  - name: Inject SSH keys into proxy qcow image
+    include_role:
+      name: common
+      tasks_from: kvm-inject-ssh-keys
+
+  - name: Define and start proxy VM
+    include_role:
+      name: common
+      tasks_from: kvm-start-vm
+    vars:
+      vm_xml: "{{ lookup('template', 'proxy_vm.xml.j2') }}"
+      autostart_enabled: false
+
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"

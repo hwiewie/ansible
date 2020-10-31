@@ -1,0 +1,20 @@
+frontend_dehydrated_domains:
+  - "{{ frontend_nginx_ssl_name }}"
+frontend_certsync_ssh_users:
+  - root@webapps.flathub.org
+frontend_flathub_backend: https://backend.webapps.flathub.org
+frontend_nginx_buildbot_origin: http://buildbot.zt.flathub.org:8010
+frontend_nginx_cache_dir: /var/cache/httpd
+frontend_nginx_cache_purge_from: 46.235.224.97 2a00:1098:86:39::2
+frontend_nginx_repo_origin: "{{ frontend_nginx_repo_origin_server }}/repo"
+frontend_nginx_repo_origin_server: https://hub.flathub.org
+frontend_nginx_beta_repo_origin: "{{ frontend_nginx_beta_repo_origin_server }}/beta-repo"
+frontend_nginx_beta_repo_origin_server: https://hub.flathub.org
+frontend_nginx_build_repo_origin: "https://hub.flathub.org/build-repo"
+frontend_nginx_ssl_name: "{{ inventory_hostname }}"
+frontend_nginx_stats_origin: https://stats.flathub.org
+frontend_nginx_webroot_domain: flathub.org
+frontend_nginx_webroot_origin: flathub.webapps.flathub.org
+frontend_nginx_flatpak_domain: flatpak.org
+frontend_nginx_flatpak_origin: flatpak.webapps.flathub.org
+frontend_nginx_enable_ssl: true

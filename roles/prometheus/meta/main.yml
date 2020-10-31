@@ -1,0 +1,4 @@
+dependencies:
+  - base
+  - alertmanager
+  - blackbox-exporter

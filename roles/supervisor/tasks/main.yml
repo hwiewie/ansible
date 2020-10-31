@@ -1,0 +1,6 @@
+---
+  - name: copy iipsrv supervisor conf
+    template: src=iipsrv.conf.j2 dest=/etc/supervisord.d/iipsrv.ini
+    sudo: yes
+    notify:
+      - restart supervisor

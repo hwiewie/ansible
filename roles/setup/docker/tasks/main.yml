@@ -1,0 +1,63 @@
+---
+# Devised from https://docs.docker.com/install/linux/docker-ce/centos/
+
+# Download the docker yum repo file if the url exists
+- name: Download docker-ce YUM repo file
+  become: true
+  get_url:
+    url: "{{ docker_yum_repo_file_url }}"
+    dest: "{{ docker_yum_repo_file_path }}" 
+    timeout: 120
+  when: use_docker_yum_repo_file_url == true
+
+- name: Fallback copy our local docker-ce yum repo templated file
+  template: 
+    src: docker-ce.repo.j2
+    dest: "{{ docker_yum_repo_file_path }}" 
+  when: use_docker_yum_repo_file_url == false
+
+- name: Install dependencies
+  become: true
+  yum:
+    name: "{{ packages }}"
+    state: present
+  vars:
+    packages:
+      - containerd.io
+      - device-mapper-persistent-data 
+      - docker-ce
+      - docker-ce-cli
+      - lvm2
+      - yum-utils
+
+# Get Docker started
+- name: Start and enable Docker service
+  become: true
+  service:
+    name: docker
+    state: started
+    enabled: true
+
+# We need to add the user (i.e. stroomuser)
+# to the docker group, so they can run docker commands without sudo.
+- name: "Add user {{ docker_user }} to docker group"
+  become: true
+  user:
+    name: "{{ docker_user }}"
+    groups: docker
+    append: true
+
+# Install docker-compose -- a yum install doesn't get a high-enough version
+- name: Remove old docker-compose if there is one
+  become: true
+  file:
+    path: /use/bin/docker-compose
+    state: absent
+    
+- name: Install docker-compose 
+  become: true
+  get_url:
+    url: "{{ docker_compose_url }}"
+    dest: /usr/bin/docker-compose
+    timeout: 120
+    mode: +x

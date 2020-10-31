@@ -1,0 +1,17 @@
+---
+dependencies:
+  - base
+  - postgres
+  - role: nginx
+    vars:
+      nginx_network_connect: yes
+    tags:
+      - repo-manager
+      - repo-manager_nginx
+  - role: dehydrated
+    vars:
+      dehydrated_domains:
+        - '{{ repo_manager_domain }}'
+    tags:
+      - repo-manager
+      - repo-manager_dehydrated

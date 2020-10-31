@@ -1,0 +1,66 @@
+---
+- hosts: vscs
+  gather_facts: no
+  serial: 1
+  tasks:
+    - include_role:
+        name: common
+        tasks_from: copy-qcow2
+      vars:
+        dest_filename: "{{ inventory_hostname }}.qcow2"
+
+- hosts: vsds
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: nsgvs
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: vnsutils
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: vsrs
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: vstats
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: nuhs
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2
+
+- hosts: webfilters
+  gather_facts: no
+  serial: 1
+  tasks:
+   - include_role:
+        name: common
+        tasks_from: copy-qcow2

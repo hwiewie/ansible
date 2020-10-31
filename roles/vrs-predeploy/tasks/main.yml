@@ -1,0 +1,126 @@
+---
+- block:
+  - name: Clean known_hosts of compute nodes (ignoring errors)
+    known_hosts:
+      name: "{{ inventory_hostname }}"
+      state: absent
+    delegate_to: localhost
+    no_log: True
+    ignore_errors: True
+
+  - name: Wait for Compute Node VM ssh to be ready
+    include_role:
+      name: common
+      tasks_from: wait-for-ssh
+    vars:
+      ssh_host: "{{ inventory_hostname }}"
+      host_username: "{{ compute_username | default(target_server_username) }}"
+
+  - name: Pull facts on vrs target {{ inventory_hostname }}
+    action: setup
+
+  - name: Remove OVS packages on RHEL/CentOS machines if present
+    yum:
+      name: "{{ redhat_family_ovs_packages }}"
+      state: absent
+    when: ansible_os_family == "RedHat"
+
+  - name: Remove OVS packages on Debian machines if present
+    apt:
+      name: "{{ debian_family_ovs_packages }}"
+      state: absent
+    when: ansible_os_family == "Debian"
+
+  - name: Enable optional rpms to install twisted core package on RHEL machines
+    blockinfile:
+      dest: "/etc/yum.repos.d/redhat.repo"
+      block: |
+        [rhel-7-server-optional-rpms]
+        name = Red Hat Enterprise Linux 7 Server - Optional (RPMs)
+        Enabled=1
+    when:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == '7'
+
+  - name: Add epel repository on RedHat OS family distros
+    yum_repository:
+      name: epel
+      description: EPEL YUM repo
+      baseurl: http://download.fedoraproject.org/pub/epel/$releasever/$basearch/
+    when: ansible_os_family == "RedHat"
+
+  - name: Upgrade all packages on RedHat OS family distros
+    yum:
+      name: "*"
+      state: latest     # noqa 403
+    when:
+      - ansible_os_family == "RedHat"
+      - yum_update | default(False)
+
+  - name: Install VRS prerequisite packages on RedHat OS family distros
+    yum:
+      name:
+        - python-twisted-core
+        - perl-JSON
+        - vconfig
+        - libvirt
+        - qemu-kvm
+        - python-six
+      state: present
+    when:
+      - ansible_os_family == "RedHat"
+      - ansible_distribution_major_version == '6'
+
+  - name: Install VRS prerequisite packages on RedHat OS family distros
+    yum:
+      name:
+        - python-twisted-core
+        - perl-JSON
+        - libvirt
+        - qemu-kvm
+        - python-six
+      state: present
+    when:
+      - ansible_os_family == "RedHat"
+      - ansible_distribution_major_version == '7'
+
+  - name: Install DKMS prerequisite packages on RedHat OS family distros
+    yum:
+      name:
+        - dkms
+        - "kernel-devel-{{ ansible_kernel }}"
+      state: present
+    when:
+      - ansible_os_family == "RedHat"
+      - dkms_install
+
+  - name: Upgrade all packages on Debian OS family distros
+    apt:
+      upgrade: dist
+    when:
+      - ansible_os_family == "Debian"
+      - force_apt_update | default(False)
+
+  - name: Install VRS prerequisite packages on Debian OS family distros
+    apt:
+      name:
+        - qemu-kvm
+        - libvirt-bin
+        - bridge-utils
+        - libguestfs-tools
+        - python-libvirt
+        - python-twisted-core
+        - python-yaml
+        - python-six
+        - libjson-perl
+        - vlan
+      state: present
+    when: ansible_os_family == "Debian"
+
+  - name: Restart Libvirt
+    service:
+      name: libvirtd
+      state: restarted
+
+  remote_user: "{{ compute_username | default(target_server_username) }}"
+  become: "{{ 'no' if compute_username == 'root' else 'yes' }}"

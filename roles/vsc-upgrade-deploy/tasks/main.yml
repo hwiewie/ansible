@@ -1,0 +1,102 @@
+- name: Clean known_hosts of VSC's (ignoring errors)
+  known_hosts:
+    name: "{{ mgmt_ip }}"
+    state: absent
+  delegate_to: localhost
+  no_log: True
+  ignore_errors: True
+
+- name: Wait for VSC ssh to be ready
+  include_role:
+    name: common
+    tasks_from: wait-for-ssh-port
+  vars:
+    ssh_host: "{{ vsc_creds.host }}"
+    ssh_password: "{{ vsc_creds.password }}"
+    ssh_user: "{{ vsc_creds.username }}"
+    check_login: True
+
+- name: Get output of 'show bof'
+  sros_command:
+    commands:
+      - show bof
+    provider: "{{ vsc_creds }}"
+  delegate_to: localhost
+  register: bof_config
+
+- name: Print 'show bof' when verbosity >= 1
+  debug: var=bof_config.stdout[0] verbosity=1
+
+- name: Create local variable with bof config in json
+  set_fact:
+    bof_json: "{{ bof_config.stdout[0]|show_bof_to_json }}"
+
+- name: Print bof config in json  when verbosity >= 1
+  debug: var=bof_json verbosity=1
+
+- name: Get current file version of image on VSC
+  sros_command:
+    commands:
+      - file version "{{ bof_json['primary_image'] }}"
+    provider: "{{ vsc_creds }}"
+  delegate_to: localhost
+  register: image
+
+- name: Print image version when verbosity >= 1
+  debug: var=image.stdout[0] verbosity=1
+
+- name: Create local variable with image version in json
+  set_fact:
+    version_json: "{{ image.stdout[0]|image_version_to_json }}"
+
+- name: Print image version in json  when verbosity >= 1
+  debug: var=version_json verbosity=1
+
+- name: Register uptime before reboot
+  sros_command:
+    commands:
+      - show uptime
+    provider: "{{ vsc_creds }}"
+  delegate_to: localhost
+  register: uptime_before_reboot
+  when: target_server_type is match('kvm') or target_server_type is match('vcenter') or target_server_type is match('openstack') or target_server_type is match("none")
+
+- name: Copy new VSC image to VSC nodes
+  command: "{{ vsc_image_copy }}"
+  no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+- block:
+
+  - name: Reboot VSC VM (ignoring errors)
+    sros_command:
+      commands:
+        - admin reboot now
+      provider: "{{ vsc_creds }}"
+    delegate_to: localhost
+    ignore_errors: true
+
+  - name: Wait for VSC ssh to be ready
+    include_role:
+      name: common
+      tasks_from: wait-for-ssh-port
+    vars:
+      ssh_host: "{{ vsc_creds.host }}"
+      ssh_timeout_seconds: 600
+      ssh_password: "{{ vsc_creds.password }}"
+      ssh_user: "{{ vsc_creds.username }}"
+      check_login: True
+
+  - name: Register uptime after reboot
+    sros_command:
+      commands:
+        - show uptime
+      provider: "{{ vsc_creds }}"
+    delegate_to: localhost
+    register: uptime_after_reboot
+
+  - name: Verify reboot happened successfully
+    assert:
+      that: "uptime_after_reboot < uptime_before_reboot"
+      fail_msg: "System uptime after reboot step suggests there were issues during reboot. Check log for errors."
+
+  when: target_server_type is match('kvm') or target_server_type is match('vcenter') or target_server_type is match('openstack') or target_server_type is match("none")

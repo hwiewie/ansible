@@ -1,0 +1,14 @@
+- name: Copy current OpenShift ca.crt
+  copy:
+    src: '/etc/origin/master/ca.crt'
+    dest: '{{ mktemp.stdout }}/ca.crt'
+    remote_src: true
+
+- name: Assemble ca-bundle.crt
+  assemble:
+    src: '{{ mktemp.stdout }}'
+    dest: /etc/origin/master/ca-bundle.crt
+    backup: yes
+    validate: 'openssl x509 -in %s -text -noout'
+    delimiter: '\n'
+  register: ca_bundle

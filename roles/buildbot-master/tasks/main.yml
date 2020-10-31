@@ -1,0 +1,135 @@
+---
+- name: install packages
+  package:
+    name:
+      - libpq-dev
+      - python3-pip
+      - python3-virtualenv
+      - git
+      - gcc # needed for installing twisted
+      # Source download needs these:
+      - flatpak-builder
+      - git
+    state: latest
+  tags:
+    - packages
+
+- name: add flathub remote
+  flatpak_remote:
+    name: flathub
+    flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
+  tags:
+    - packages
+
+- name: add flathub-beta remote
+  flatpak_remote:
+    name: flathub-beta
+    flatpakrepo_url: https://flathub.org/beta-repo/flathub-beta.flatpakrepo
+  tags:
+    - packages
+
+- name: create buildbot state directory
+  file:
+    path: "{{ buildbot_master_sandbox }}"
+    state: directory
+
+- name: install pip and python dependencies in virtualenv
+  pip:
+    name:
+      - pip
+      - requests
+      - psycopg2
+      - txrequests
+      - lz4
+    state: latest
+    virtualenv: "{{ buildbot_master_sandbox }}"
+    virtualenv_python: python3
+  tags: virtualenv
+
+- name: install buildbot in virtualenv
+  pip:
+    name:
+      - https://github.com/flathub/buildbot/releases/download/v{{ buildbot_master_version | replace('+', '.') }}/buildbot_pkg-{{ buildbot_master_version }}-py3-none-any.whl
+      - https://github.com/flathub/buildbot/releases/download/v{{ buildbot_master_version | replace('+', '.') }}/buildbot_worker-{{ buildbot_master_version }}-py2.py3-none-any.whl
+      - https://github.com/flathub/buildbot/releases/download/v{{ buildbot_master_version | replace('+', '.') }}/buildbot-{{ buildbot_master_version }}-py3-none-any.whl
+      - https://github.com/flathub/buildbot/releases/download/v{{ buildbot_master_version | replace('+', '.') }}/buildbot_www-{{ buildbot_master_version }}-py3-none-any.whl
+    state: present
+    virtualenv: "{{ buildbot_master_sandbox }}"
+    virtualenv_python: python3
+  notify:
+   - restart buildbot-master
+  tags: virtualenv
+
+- name: check out buildbot-config
+  git:
+    repo: https://github.com/flathub/buildbot-config.git
+    version: master
+    dest: "{{ buildbot_master_dir }}"
+  notify:
+   - reconfig buildbot-master
+
+- name: install flathub.gpg
+  get_url:
+    url: https://dl.flathub.org/repo/flathub.gpg
+    checksum: sha256:8bdc20abc4e19c0796460beb5bfe0e7aa4138716999e19c6f2dbdd78cc41aeaa
+    dest: "{{ buildbot_master_dir }}/flathub.gpg"
+
+- name: update buildbot config.json
+  template:
+    src: config.json.j2
+    dest: "{{ buildbot_master_dir }}/config.json"
+  notify:
+   - reconfig buildbot-master
+
+- name: update buildbot builders.json
+  template:
+    src: builders.json.j2
+    dest: "{{ buildbot_master_dir }}/builders.json"
+  notify:
+   - restart buildbot-master required
+
+- name: create buildbot-master
+  command: >-
+    {{ buildbot_master_sandbox }}/bin/buildbot create-master
+    --db=postgresql:///{{ buildbot_master_db }} {{ buildbot_master_dir }}
+  args:
+    creates: "{{ buildbot_master_dir }}/buildbot.tac"
+
+- name: add systemd unit
+  template:
+    src: buildbot-master.service.j2
+    dest: /etc/systemd/system/buildbot-master.service
+
+- name: enable and start worker
+  systemd:
+    name: buildbot-master
+    daemon_reload: yes
+    enabled: yes
+    state: started
+
+- name: permit port 8010 in firewall for buildbot (zerotier only)
+  firewalld:
+    port: 8010/tcp
+    state: enabled
+    permanent: true
+    immediate: true
+    zone: dmz
+
+- name: permit port 9989 (workers) in firewall for buildbot (zerotier only)
+  firewalld:
+    port: 9989/tcp
+    state: enabled
+    permanent: true
+    immediate: true
+    zone: dmz
+
+- name: configure nginx
+  template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/conf.d/buildbot.conf
+    validate: /usr/local/sbin/ansible-validate-nginx-config %s conf.d/buildbot.conf
+    mode: 0644
+  notify:
+   - reload nginx
+  tags:
+    - nginx

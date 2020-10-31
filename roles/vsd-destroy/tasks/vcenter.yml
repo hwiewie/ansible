@@ -1,0 +1,96 @@
+---
+
+- name: Finding VM folder (ignoring errors)
+  connection: local
+  vmware_guest_find:
+    hostname: "{{ target_server }}"
+    username: "{{ vcenter.username }}"
+    password: "{{ vcenter.password }}"
+    name: "{{ vm_name }}"
+    validate_certs: no
+  register: vsd_vm_folder
+  ignore_errors: on
+
+- name: Check output message for unexpected errors
+  assert:
+    that: vsd_vm_folder.msg is search('Unable to find folders for virtual machine')
+    fail_msg: "{{ vsd_vm_folder.msg }}"
+  when: vsd_vm_folder.msg is defined
+
+- name: Check for exception in VSD VM Folder
+  fail: msg="Exception found {{ vsd_vm_folder.exception }}"
+  when: vsd_vm_folder.exception is defined
+
+- name: Gathering info on VM
+  connection: local
+  vmware_guest_info:
+    hostname: "{{ target_server }}"
+    username: "{{ vcenter.username }}"
+    password: "{{ vcenter.password }}"
+    datacenter: "{{ vcenter.datacenter }}"
+    folder: "/{{ vcenter.datacenter }}{{ vsd_vm_folder['folders'][0] }}"
+    name: "{{ vm_name }}"
+    validate_certs: no
+  register: vsd_vm_facts
+  when: vsd_vm_folder is succeeded
+
+- block:
+
+  - block:
+
+    - name: Get Facts of VM
+      vmware_vm_info:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        validate_certs: no
+      delegate_to: localhost
+      register: vm_info
+
+    - name: Set uuid fact
+      set_fact:
+        uuid: "{{ item.uuid }}"
+      when: item.guest_name == vm_name
+      with_items: "{{ vm_info.virtual_machines }}"
+
+    - debug: var=uuid
+
+    - name: Turn off autostart
+      connection: local
+      vmware_autostart:
+        name: "{{ vm_name }}"
+        uuid: "{{ uuid }}"
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        state: disable
+        validate_certs: no
+
+    - name: Power off the vsd VM
+      connection: local
+      vmware_guest:
+        hostname: "{{ target_server }}"
+        username: "{{ vcenter.username }}"
+        password: "{{ vcenter.password }}"
+        validate_certs: no
+        datacenter: "{{ vcenter.datacenter }}"
+        folder: "/{{ vcenter.datacenter }}{{ vsd_vm_folder['folders'][0] }}"
+        name: "{{ vm_name }}"
+        state: "poweredoff"
+
+    when: vsd_vm_facts['instance']['hw_power_status'] == 'poweredOn'
+
+  - name: Removing the vsd VM
+    connection: local
+    vmware_guest:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      validate_certs: no
+      datacenter: "{{ vcenter.datacenter }}"
+      folder: "/{{ vcenter.datacenter }}{{ vsd_vm_folder['folders'][0] }}"
+      name: "{{ vm_name }}"
+      state: "absent"
+    when: (not preserve_vm | default( False ))
+
+  when: vsd_vm_folder is succeeded and vsd_vm_facts is succeeded

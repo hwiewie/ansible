@@ -1,0 +1,39 @@
+---
+- hosts: vsc_ha_node1
+  gather_facts: no
+  connection: local
+  pre_tasks:
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+
+    - name: Check if VSC prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vsc_fallocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+    - name: Lets run VSC upgrade deploy 1
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsc_ha_upgrade_deploy_1
+          - vsc_upgrade_deploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsc-upgrade-deploy
+  vars:
+    vsc_username: "{{ vsc_custom_username | default(vsc_default_username) }}"
+    vsc_password: "{{ vsc_custom_password | default(vsc_default_password) }}"

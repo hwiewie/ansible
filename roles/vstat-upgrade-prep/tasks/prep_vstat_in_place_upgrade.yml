@@ -1,0 +1,77 @@
+- block:
+
+  - name: Get elasticsearch version
+    command: "curl localhost:9200"      # noqa 303
+    register: es_version
+
+  - name: Convert es_version output to json
+    set_fact:
+      es_version_json: "{{ es_version.stdout | from_json }}"
+
+  - name: Stat the current es version log file
+    stat: path=/root/current_es_version.log
+    register: es_version
+
+  - name: Write current es version to file on vstat node(s)
+    shell: echo "{{ es_version_json.version.number }}" >> /root/current_es_version.log
+    when: not es_version.stat.exists
+
+  remote_user: "{{ vstat_username | default(vstat_default_username) }}"
+  become: "{{ 'no' if vstat_username | default(vstat_default_username) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ vstat_password | default(vstat_default_password) }}"
+
+- name: Get vsd node(s) information
+  import_role:
+    name: common
+    tasks_from: vsd-node-info.yml
+  vars:
+    vsd_hostname: "{{ vsd_fqdn }}"
+  run_once: true
+
+- name: Disable stats collection on all VSD nodes
+  include_role:
+    name: common
+    tasks_from: disable-stats-on-vsd.yml
+  with_items: "{{ vsd_hostname_list }}"
+  loop_control:
+    loop_var: vsd
+
+- block:
+  - name: Generate ssh key on vsd for vstat upgrade
+    command: ssh-keygen -b 2048 -t rsa -f /root/.ssh/vstat_rsa -q -N ""
+    args:
+      creates: /root/.ssh/vstat_rsa
+
+  - name: Get generated SSH keys
+    command: cat ~/.ssh/vstat_rsa.pub
+    changed_when: False
+    register: ssh_key
+
+  delegate_to: "{{ vsd_hostname_list[0] }}"
+  remote_user: "{{ hostvars[vsd_hostname_list[0]].vsd_custom_username | default(vsd_custom_username | default(vsd_default_username)) }}"
+  become: "{{ 'no' if hostvars[vsd_hostname_list[0]].vsd_custom_username | default(vsd_custom_username | default(vsd_default_username)) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ hostvars[vsd_hostname_list[0]].vsd_custom_password | default(vsd_custom_password | default(vsd_default_password)) }}"
+  run_once: true
+
+- name: Copy ssh key from vsd to vstat node(s)
+  shell: "echo {{ ssh_key.stdout }} >> /root/.ssh/authorized_keys"
+  remote_user: "{{ vstat_username | default(vstat_default_username) }}"
+  become: "{{ 'no' if vstat_username | default(vstat_default_username) == 'root' else 'yes' }}"
+  changed_when: True
+  vars:
+    ansible_become_pass: "{{ vstat_password | default(vstat_default_password) }}"
+
+- name: Generate SSH keys
+  include_role:
+    name: common
+    tasks_from: vstat_generate_ssh_keys.yml
+  with_items:
+    - "{{ groups['vstats'] }}"
+  loop_control:
+    loop_var: vstat
+  vars:
+    vstat_username: "{{ vstat_default_username }}"
+    group_vstats: "{{ groups['vstats'] }}"
+    upgrade: true

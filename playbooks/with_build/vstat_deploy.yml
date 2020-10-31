@@ -1,0 +1,41 @@
+---
+- hosts: vstats
+  gather_facts: no
+  pre_tasks:
+    - name: Lets run VSTAT deploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vstat_deploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vstat-deploy
+
+- hosts: primary_vstats
+  gather_facts: no
+  pre_tasks:
+    - name: Set active flag
+      set_fact:
+        active: True
+
+    - name: Lets run VSTAT deploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vstat_deploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vstat-deploy
+
+- name: Run VSTAT Standby Deploy
+  import_playbook: "vstat_standby_deploy.yml"

@@ -1,0 +1,51 @@
+---
+
+- hosts: vsd_upgrade_ha_node2
+  gather_facts: no
+  pre_tasks:
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+    - name: Lets run VSD upgrade prepare VSD 2 hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsd_upgrade_prepare_for_deploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsd-upgrade-prepare-for-deploy
+
+- hosts: vsd_upgrade_ha_node2:vsd_upgrade_ha_node3
+  gather_facts: no
+  pre_tasks:
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+    - name: Lets run VSD deploy VSD 2 and VSD 3 hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsd_ha_upgrade_deploy_2_and_3
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsd-deploy

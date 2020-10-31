@@ -1,0 +1,14 @@
+- name: Clean known_hosts of VSCs (ignoring errors)
+  known_hosts:
+    name: "{{ mgmt_ip }}"
+    state: absent
+  delegate_to: localhost
+  no_log: True
+  ignore_errors: True
+
+- name: Check VSC Health after deployment
+  import_role: name="vsc-health"
+  connection: local
+  vars:
+    report_filename: vsc-postdeploy-health
+  delegate_to: localhost

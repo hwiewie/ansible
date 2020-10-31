@@ -1,0 +1,3 @@
+Package: /flatpak/ /git/ /ostree/ /xdg-desktop-portal/
+Pin: release o=Debian Backports
+Pin-Priority: 500

@@ -1,0 +1,15 @@
+---
+- name: Enable ExpandPersistenVolumes on Node
+  yedit:
+    src: '{{ openshift_local_volume_node_config }}'
+    key: kubeletArguments.feature-gates
+    value:
+    - PersistentLocalVolumes=true
+    - VolumeScheduling=true
+    - MountPropagation=true
+    state: present
+    backup: yes
+
+- import_role:
+    name: common
+    tasks_from: restart-node.yaml

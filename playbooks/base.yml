@@ -1,0 +1,6 @@
+---
+- name: set up base config
+  hosts: all
+  roles:
+  - base
+  - node-exporter

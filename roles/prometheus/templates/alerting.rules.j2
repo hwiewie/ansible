@@ -1,0 +1,112 @@
+groups:
+- name: prometheus
+  rules:
+  - alert: Watchdog
+    expr: vector(1)
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      description: "Dead Man's Switch"
+      summary: 'Ensure entire alerting pipeline is functional'
+- name: node
+  rules:
+  - alert: Instance down
+    expr: "up == 0"
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}Instance {{ $labels.instance }} is down{% endraw %}"
+  - alert: Instance rebooted
+    expr: node_boot_time_seconds < 60
+    labels:
+      severity: warning
+    annotations:
+      summary: "{% raw %}Instance {{ $labels.instance }} was rebooted{% endraw %}"
+  - alert: High CPU usage
+    expr: '1 - (avg by (instance) (irate(node_cpu_seconds_total{job="node",mode="idle",role!="buildbot_worker"}[5m]))) > 0.9'
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}Instance {{ $labels.instance }} is under high CPU usage{% endraw %}"
+  - alert: Prolonged high CPU usage on builder
+    expr: '1 - (avg by (instance) (irate(node_cpu_seconds_total{job="node",mode="idle",role="buildbot_worker"}[5m]))) > 0.95'
+    for: 2h
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}Buildbot worker{{ $labels.instance }} is under high CPU usage for 2h{% endraw %}"
+  - alert: High disk usage
+    expr: (node_filesystem_size_bytes{mountpoint=~"/|/srv|/boot|/tank"} - node_filesystem_avail_bytes{mountpoint=~"/|/srv|/boot|/tank"}) /  node_filesystem_size_bytes{mountpoint=~"/|/srv|/boot|/tank"} > 0.9
+    labels:
+      severity: warning
+    annotations:
+      summary: "{% raw %}Instance {{ $labels.instance }} has high disk usage on {{ $labels.mountpoint }}{% endraw %}"
+  - alert: Read-only filesystem
+    expr: node_filesystem_readonly{mountpoint=~"/|/srv|/tank"} != 0
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}Instance {{ $labels.instance }} has read-only filesystem on {{ $labels.mountpoint }}{% endraw %}"
+  - alert: System is not operational
+    expr: "node_systemd_system_running == 0"
+    for: 15m
+    labels:
+      severity: critical
+    annotations:
+      summary: "System is not operational for more than 15 minutes"
+- name: blackbox
+  rules:
+  - alert: Blackbox exporter is down
+    expr: up{job="blackbox"} == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Blackbox exporter is offline"
+  - alert: Probe failed
+    expr: probe_success == 0
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}Endpoint {{ $labels.instance }} is down for more than 10s{% endraw %}"
+  - alert: SSL certificate expires in 3 weeks
+    expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 21
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "{% raw %}SSL certificate used for {{ $labels.instance }} expires in 3 weeks{% endraw %}"
+  - alert: SSL certificate expires soon
+    expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 7
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "{% raw %}SSL certificate used for {{ $labels.instance }} expires in 7 days{% endraw %}"
+- name: flathub
+  rules:
+  - alert: Stale summary file or signature
+    expr: flathub_summary_in_sync{instance!~"^front-sel.*"} == 0
+    for: 10m
+    labels:
+      severity: critical
+    annotations:
+      summary: "The summary file or its signature served by the node differs from the one on the master server"
+  - alert: Stale summary file or signature (front-sel)
+    expr: flathub_summary_in_sync{instance=~"^front-sel.*"} == 0
+    for: 1h
+    labels:
+      severity: critical
+    annotations:
+      summary: "The summary file or its signature served by the node differs from the one on the master server"
+  - alert: Stale summary file or signature on CDN
+    expr: flathub_cdn_summary_in_sync == 0
+    for: 20m
+    labels:
+      severity: critical
+    annotations:
+      summary: "The summary file or its signature served by CDN differs from the one on the master server"

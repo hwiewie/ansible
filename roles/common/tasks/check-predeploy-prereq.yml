@@ -1,0 +1,127 @@
+- block:
+
+  - name: Check SSH Connectivity to target server (ignoring errors)
+    include_role:
+      name: common
+      tasks_from: wait-for-ssh
+    vars:
+      ssh_host: "{{ target_server }}"
+      host_username: "{{ target_server_username }}"
+      retries: 5
+      delay: 5
+    ignore_errors: True
+
+  - name: Check output of SSH test
+    assert:
+      that: "not {{ wait_for_ssh_output.failed }}"
+      msg: "Failed to connect to target_server {{ target_server }}. Is passwordless SSH set up?"
+
+  when: target_server_type | default('NONE') is match("kvm")
+
+- block:
+
+  - block:
+
+    - name: Check that image files were found
+      assert:
+        that: "image_path | default('MISSING') != 'MISSING' and image_file_name | default('MISSING') != 'MISSING'"
+        msg: "Missing image files for {{ hostname | default(vmname) }} under the unzipped file directory, please unzip them."
+      when: 
+        - target_server_type is match("kvm") or target_server_type is match("vcenter")
+        - not skip_copy_images | default(False)
+
+    when: component_type | default("NONE") != 'vrs'
+
+  - block:
+
+    - name: Check that VRS package files were found
+      assert:
+        that: "vrs_package_path | default('MISSING') != 'MISSING'"
+        msg: "Missing VRS package files under the unzipped file directory, please unzip them."
+
+    - name: Check that DKMS files were found
+      assert:
+        that: "dkms_package_path | default('MISSING') != 'MISSING'"
+        msg: "Missing VRS DKMS files under the unzipped file directory, please unzip it."
+      when: dkms_install
+
+    when: component_type | default("NONE") == 'vrs'
+
+  when: not vsd_inplace_upgrade | default(false)
+
+- block:
+
+  - name: Check available disk space on hypervisor
+    include_role:
+      name: common
+      tasks_from: check-hypervisor-disk-space
+    vars:
+      required_available_space: "{{ required_available_disk_space | default(0) }}"
+      path: "{{ disk_space_path | default('NONE') }}"
+
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"
+  when: target_server_type | default('NONE') is match("kvm")
+
+- block:
+
+  - name: Get info on datastore
+    connection: local
+    vmware_datastore_info:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      validate_certs: no
+      cluster: "{{ vcenter.cluster }}"
+      datacenter: "{{ vcenter.datacenter }}"
+    register: datastore_facts
+
+  - name: Select first datastore by default
+    set_fact:
+      vmware_datastore: "{{ datastore_facts.datastores | first }}"
+
+  - name: Select correct datastore
+    set_fact:
+      vmware_datastore: "{{ (datastore_facts.datastores | selectattr('name','equalto',vcenter.datastore) | first) }}"
+    when: vcenter.datastore is defined
+
+  - name: Set fact for datastore free space
+    set_fact:
+      datastore_free_space_kb: "{{ vmware_datastore.freeSpace | float / 1024 }}"
+
+  - name: Set fact for required available disk space
+    set_fact:
+      required_available_space_kb: "{{ required_available_disk_space | default(0) | float * (1024 * 1024) }}"
+
+  - name: Assert datastore has enough space for predeploy
+    assert:
+      that: (datastore_free_space_kb | float ) > (required_available_space_kb | float)
+      msg: "Insufficient disk space {{ datastore_free_space_kb | float / (1024 * 1024) }} GB for predeploy"
+
+  when: target_server_type | default('NONE') is match ("vcenter")
+
+- block:
+
+  - name: Check mgmt target bridge
+    assert:
+      that: '"mgmt" not in required_bridges or mgmt_bridge != "NONE"'
+      msg: "Required mgmt network bridge not configured"
+
+  - name: Check data target bridge
+    assert:
+      that: '"data" not in required_bridges or data_bridge != "NONE"'
+      msg: "Required data network bridge not configured"
+
+  - name: Check access target bridge
+    assert:
+      that: '"access" not in required_bridges or access_bridge != "NONE"'
+      msg: "Required access network bridge not configured"
+
+  when: target_server_type | default('NONE') is match ("kvm") or target_server_type | default('NONE') is match ("vcenter")
+
+- name: Fail if vrs_package_path is not defined
+  assert:
+    that: vrs_package_path != "MISSING"
+    msg: "vrs_package_path not defined. Please define it and try again."
+  when: vrss is defined and vrss|length > 0

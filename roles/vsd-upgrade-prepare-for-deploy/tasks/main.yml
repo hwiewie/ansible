@@ -1,0 +1,44 @@
+- name: Wait for VSD ssh to be ready
+  include_role:
+    name: common
+    tasks_from: wait-for-ssh
+  vars:
+    ssh_host: "{{ mgmt_ip }}"
+    host_username: "{{ vsd_default_username }}"
+
+- block:
+
+  - name: Create the directory on VSD to store backup files in
+    file:
+      path: "/opt/vsd/data"
+      state: directory
+
+  - name: Copy backup files from backup_machine
+    copy:
+      src: "{{ item }}"
+      dest: "/opt/vsd/data/"
+    with_fileglob:
+      - "{{ restore_dir | default( metro_backup_root + '/backup-latest-upgrade-vsd' ) }}/*.tar.gz"
+
+  - name: Delete log files from /opt/vsd/data/ directory
+    shell:
+      cmd: "rm -rf /opt/vsd/data/*.log"
+      warn: no
+
+  - name: Get list of files in /opt/vsd/data/ directory
+    find:
+      path: "/opt/vsd/data/"
+      pattern: "*.tar.gz"
+    register: lst_files
+
+  remote_user: "{{ vsd_default_username }}"
+
+- name: Verify  /opt/vsd/data/ directory contains exactly 3 files
+  assert:
+    that: "lst_files.examined == 3"
+    msg: "/opt/vsd/data does not contain exactly 3 files"
+
+- name: Reset keystore password to default, if changed
+  include_role:
+    name: common
+    tasks_from: vsd-reset-keystorepass

@@ -1,0 +1,26 @@
+---
+- name: create certsync user
+  user:
+    name: certsync
+    system: yes
+    home: /var/lib/certsync
+
+- name: add ssh keys for syncing
+  authorized_key:
+    user: certsync
+    key: "{{ lookup('file', 'ssh/{{ item }}.pub') }}"
+  with_items: "{{ frontend_certsync_ssh_users }}"
+
+- name: make certs dir
+  file:
+    path: /var/lib/certsync/certs
+    state: directory
+    owner: certsync
+    group: certsync
+    mode: 0700
+
+- name: grant permission to restart nginx
+  copy:
+    content: |
+      certsync ALL = (root) NOPASSWD: /bin/systemctl reload nginx
+    dest: /etc/sudoers.d/certsync

@@ -1,0 +1,62 @@
+---
+###################
+# DNS - DNS VM
+###################
+
+- name: When defined
+  block:
+
+  - block:
+    - name: create dns directory
+      file: path={{ nuage_unzipped_files_dir }}/dns state=directory
+
+    - name: Set VSTAT VM QCOW2 location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "Nuage-elastic-*.qcow2"
+
+    - name: Register VSTAT QCOW2 variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    - name: Verify that VSTAT VM QCOW2 file was found
+      assert:
+        that: image_file_name | default('MISSING') != 'MISSING',
+        msg: "DNS image is taken from VSTAT, but we can't find the image path. Make sure VSTATs are defined in your deployment vstats.yml"
+
+    - name: Stat the dns qcow2 file
+      stat:
+        path: "{{ nuage_unzipped_files_dir }}/dns/dns.qcow2"
+      register: qcow_file
+
+    - name: Copy vstat qcow2 image to dns directory
+      copy: src={{ image_path }}/{{ image_file_name }} dest={{ nuage_unzipped_files_dir }}/dns/dns.qcow2 force=yes
+      when: not qcow_file.stat.exists
+
+    - name: Set DNS VM QCOW2 location
+      include_role:
+        name: common
+        tasks_from: find-file.yml
+      vars:
+        dir_name: "{{ nuage_unzipped_files_dir }}"
+        pattern: "Nuage-elastic-*.qcow2"
+
+    - name: Register DNS QCOW2 variables with proper path and image locations for use in other playbooks
+      set_fact:
+        image_path: "{{ file_path }}"
+        image_file_name: "{{ file_name }}"
+
+    when: dnss | map(attribute='target_server_type') | list is issuperset(["kvm"]) or dnss | map(attribute='target_server_type') | list is issuperset(["heat"])
+
+  - name: Create host_vars files for dns
+    template: src=dns.j2 backup=no dest={{ inventory_dir }}/host_vars/{{ item.hostname }}
+    with_items: "{{ dnss }}"
+
+  when:
+    - dnss is defined and dnss|length > 0
+  tags:
+    - dns

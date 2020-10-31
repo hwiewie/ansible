@@ -1,0 +1,296 @@
+---
+- name: Verify that the tar.gz directory is specified
+  assert: {
+    that: nuage_zipped_files_dir is defined,
+    msg: "nuage_zipped_files_dir was not specified"
+    }
+
+- name: Stat the tar.gz directory
+  stat:
+    path: "{{ nuage_zipped_files_dir }}"
+  register: tar_gz
+
+- name: Verify that the tar.gz directory exists
+  assert: {
+    that: tar_gz.stat.isdir is defined and tar_gz.stat.isdir or tar_gz.stat.islnk is defined and tar_gz.stat.islnk,
+    msg: "{{ nuage_zipped_files_dir }} is not a valid directory"
+    }
+
+##########################
+# Install Prerequisites
+##########################
+- name: Pull facts of localhost
+  connection: local
+  action: setup
+
+- block:
+  - name: Check if required OS packages are installed (ignoring errors)
+    command:
+      cmd: rpm -q unzip
+      warn: no
+    connection: local
+    register: rpm_check
+    ignore_errors: True
+
+  - name: Install packages for RedHat OS family distros
+    yum: name=unzip state=present
+    connection: local
+    environment:
+      http_proxy: "{{ yum_proxy | default('') }}"
+      https_proxy: "{{ yum_proxy | default('') }}"
+    when: rpm_check.rc == 1
+  when: ansible_os_family is match("RedHat")
+
+- name: Install unzip on Debian OS family distribution
+  apt: name=unzip state=present
+  connection: local
+  when: ansible_os_family is match("Debian")
+
+
+#################
+# VSD
+#################
+
+# QCOW2
+- block:
+  - name: Find and unzip VSD QCOW2 Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:       "(?i)Nuage-VSD.*QCOW.*"
+      unpack_target_folder: "vsd/qcow2"
+
+  - name: Find and unzip VSD OVA Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:       "(?i)Nuage-VSD.*OVA.*"
+      unpack_target_folder: "vsd/ova"
+
+  - name: Find and unzip VSD migration Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:       "(?i)Nuage-VSD-migration.*"
+      unpack_target_folder: "vsd/migration"
+  tags:
+    - vsd
+
+###################
+# VSTAT - Stats VM
+###################
+
+- block:
+  - name: Find and unzip VSTAT Stats Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-elastic-[0-9].*"
+      unpack_target_folder:  "vstat"
+
+  - name: Find and unzip VSTAT Stats upgrade Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-elastic-upgrade-[0-9].*"
+      unpack_target_folder:  "vstat"
+
+  - name: Find and unzip VSTAT Stats backup Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-elastic-backup-[0-9].*"
+      unpack_target_folder:  "vstat/backup"
+  tags:
+    - vstat
+
+###################
+# VSC
+###################
+
+- block:
+  - name: Find and unzip VSC Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VSC.*"
+      unpack_target_folder:  "vsc"
+  tags:
+    - vsc
+
+################
+# VRS
+################
+
+- block:
+  - name: Find and unzip hyperv VRS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VRS.*-hyperV.*"
+      unpack_target_folder:  "vrs/hyperv"
+
+
+  - name: Find and unzip vmware VRS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VRS.*-vmware.*"
+      unpack_target_folder:  "vrs/vmware"
+
+  - name: Find and unzip EL7 VRS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VRS.*(?<!vmware)-el7.*"
+      unpack_target_folder:  "vrs/el7"
+
+  - name: Find and unzip ubuntu-16.04 VRS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VRS.*-ubuntu.16.04.*"
+      unpack_target_folder:  "vrs/u16_04"
+
+  - name: Find and unzip VMWare VRS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VRS.*-vmware.*"
+      unpack_target_folder:  "vrs/vmware"
+
+  tags:
+    - vrs
+
+
+################
+# Selinux
+#################
+- block:
+  - name: Find and unzip selinux package
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-selinux-.*"
+      unpack_target_folder:  "selinux"
+
+  tags:
+    - vrs
+
+################
+# Netconf Manager
+#################
+- block:
+  - name: Find and unzip netconf manager package
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)nuage-netconf.*"
+      unpack_target_folder:  "netconf"
+
+#####################
+# VNS Utility/ NSGV
+#####################
+
+- block:
+
+  # for releases before 4.0.R9 when all VNS packages were archived to one file
+  - name: Find and unzip VNS Archive for releases before 4.0.R9
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VNS-[0-9].*"
+      unpack_target_folder:  "vns"
+
+  - name: Find and unzip VNS NSG Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:          "(?i)Nuage-VNS-NSG-.*"
+      unpack_target_folder:    "vns/nsg"
+
+  - name: Find and unzip VNS Utils Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:          "(?i)Nuage-VNS-Utils-.*"
+      unpack_target_folder:    "vns/utils"
+
+  - name: Find and unzip VNS Utils qcow2 Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:          "(?i)Nuage-utility-host-qcow2.*"
+      unpack_target_folder:    "vns/nuh"
+
+  - name: Find and unzip VNS Utils ova Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:          "(?i)Nuage-utility-host-ova.*"
+      unpack_target_folder:    "vns/nuh/ova"
+
+  # for releases starting from 4.0.R9 when VNS packages were archived to 2 files
+  # + unpack AWS archive
+  - name: Find and unzip VNS NSG Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VNS-NSG.*"
+      unpack_target_folder:  "vns/nsg"
+
+  - name: Find and unzip VNS AWS NSG Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:         "Nuage-NSG-.*AWS.*"
+      unpack_target_folder:   "vns/nsg/aws"
+
+  - name: Find and unzip VNS Utils Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-VNS-Utils.*"
+      unpack_target_folder:  "vns/utils"
+
+  tags:
+    - vns
+
+##########################
+## Nuage OpenStack Plugins
+##########################
+
+- block:
+  - name: Find and unzip the Nuage OpenStack Plugin Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:        "(?i)Nuage-openstack.*"
+      unpack_target_folder:  "nuage_os"
+  tags:
+    - nuage_os
+
+##########################
+## Nokia VSR
+##########################
+- block:
+  - name: Find and unzip the Nokia VSR Archive
+    import_tasks: unpack_actions_vsr.yml
+    vars:
+      unpack_pattern:        "(?i)Nokia-VSR-VM.*"
+      unpack_target_folder:  "vsr"
+  tags:
+    - vsr
+
+##########################
+## Nuage SD-WAN Portal
+##########################
+- block:
+  - name: Find SD-WAN Portal OS Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:         "nuage-portal-base-CentOS-*"
+      unpack_target_folder:   "vns/portal"
+      unpack_register_var:     "rc_vns_portal_os"
+
+  - name: Find SD-WAN Portal SW Archive
+    import_tasks: unpack_actions_portal.yml
+    vars:
+      unpack_pattern:        "nuage-portal-container*"
+      unpack_target_folder:  "vns/portal"
+      unpack_register_var:   "rc_vns_portal"
+
+##########################
+## Webfilter
+##########################
+- block:
+  - name: Find and unzip Webfilter QCOW2 Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:       "(?i)nuage-webfilter.*QCOW.*"
+      unpack_target_folder: "webfilter"
+
+  - name: Find and unzip Webfilter OVA Archive
+    import_tasks: unpack_actions.yml
+    vars:
+      unpack_pattern:       "(?i)nuage-webfilter.*OVA.*"
+      unpack_target_folder: "webfilter/ova"
+  tags:
+    - vsd

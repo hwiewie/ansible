@@ -1,0 +1,35 @@
+- block:
+
+  - name: set skip copy images to default
+    set_fact:
+      skip_copy_images: False
+    when: skip_copy_images is undefined
+
+  - include_role:
+      name: common
+      tasks_from: copy-qcow2
+    when: not skip_copy_images | default(False)
+
+  - block:
+    - name: Check to make sure there is an existing qcow image
+      stat:
+        path: "{{ vsr_target_qcow2_file_path }}"
+      register: statResult
+
+    - name: check the result of image find command
+      assert:
+        that: statResult.stat.exists
+        msg: Missing qcow2 file {{ vsr_target_qcow2_file_path }}
+
+    when: skip_copy_images
+
+  - name: Copy license file to VSR qcow2 image file
+    command:
+      guestfish --rw \
+      -a {{ vsr_target_qcow2_file_path }} \
+      -m {{ vsr_partition }} \
+      copy-in {{ images_path }}/{{ vmname }}/license.txt /
+
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"

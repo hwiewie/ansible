@@ -1,0 +1,9 @@
+- name: restart repo-manager
+  service:
+    name: repo-manager
+    state: restarted
+
+- name: restart gpg-agent
+  service:
+    name: gpg-agent
+    state: restarted

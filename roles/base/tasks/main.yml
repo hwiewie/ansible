@@ -1,0 +1,58 @@
+---
+- name: create admin users
+  user:
+    name: "{{ item.username }}"
+    comment: "{{ item.realname }}"
+    groups: "{{ base_admin_group }}"
+  with_items: "{{ base_admin_users }}"
+  tags:
+   - users
+
+# TODO: Get Alex to use a 4k RSA key
+- name: add admin ssh keys
+  authorized_key:
+    user: "{{ item.username }}"
+    key: "{{ lookup('file', 'ssh/{{ item.username }}.pub') }}"
+  with_items: "{{ base_admin_users }}"
+  tags:
+   - users
+
+- block:
+  - name: apt update
+    apt: update_cache=yes cache_valid_time=3600
+
+  - name: install base packages
+    package:
+      name: "{{ base_packages + base_packages_deb }}"
+  when: ansible_os_family == "Debian"
+
+- name: install base packages
+  package:
+    name: "{{ base_packages + base_packages_rpm }}"
+  when: ansible_os_family == "RedHat"
+
+- name: allow passwordless sudo
+  lineinfile:
+    name: /etc/sudoers
+    state: present
+    regexp: '^%{{ base_admin_group }}(\s+)ALL='
+    line: '%{{ base_admin_group }} ALL=(ALL) NOPASSWD: ALL'
+    validate: '/usr/sbin/visudo -cf %s'
+
+- name: configure ufw
+  include: ufw.yml
+  when: base_firewall == 'ufw'
+
+- name: configure firewalld
+  include: firewalld.yml
+  when: base_firewall == 'firewalld'
+
+- name: set timezone to UTC
+  timezone:
+    name: UTC
+
+- name: configure Mythic Beasts hosts
+  include: mythic.yml
+  when: ('mythic' in group_names)
+  tags:
+  - mythic

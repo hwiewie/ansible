@@ -1,0 +1,49 @@
+- block:
+
+  - block:
+
+    - name: Check target for supported OS
+      fail: msg="Unsupported OS family ({{ ansible_os_family }})"
+      when: ansible_os_family not in vsr_target_server_os_family_list
+
+    - name: If RedHat, install packages for RedHat OS family distros
+      yum:
+        name:
+         - qemu-kvm
+         - libvirt
+         - bridge-utils
+         - libguestfs-tools
+         - libvirt-python
+        state: present
+
+    - name: Make sure libvirtd has started
+      service:
+        name: libvirtd
+        enabled: yes
+        state: started
+
+    when: ansible_os_family is match("RedHat")
+
+  - block:
+
+    - name: Install packages for Debian OS family distros
+      apt:
+        name:
+         - qemu-kvm
+         - libvirt-bin
+         - bridge-utils
+         - libguestfs-tools
+         - python-libvirt
+        state: present
+
+    - name: Make sure libvirtd has started
+      service:
+        name: libvirtd
+        enabled: yes
+        state: started
+
+    when: ansible_os_family is match("Debian")
+
+  delegate_to: "{{ target_server }}"
+  remote_user: "{{ target_server_username }}"
+  become: "{{ 'no' if target_server_username == 'root' else 'yes' }}"

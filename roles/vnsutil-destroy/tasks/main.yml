@@ -1,0 +1,28 @@
+- include_role:
+    name: check-skip-target-server
+  vars:
+    - target_server_list: ["kvm", "vcenter", "aws", "openstack"]
+
+- import_tasks: kvm.yml
+  when: target_server_type is match("kvm")
+  tags:
+    - vnsutil
+    - vnsutil-destroy
+
+- import_tasks: vcenter.yml
+  when: target_server_type is match("vcenter")
+  tags:
+    - vnsutil
+    - vnsutil-destroy
+
+- import_tasks: aws.yml
+  when: target_server_type is match("aws")
+  tags:
+    - vnsutil
+    - vnsutil-destroy
+
+- import_tasks: openstack.yml
+  when: target_server_type is match("openstack")
+  tags:
+    - vnsutil
+    - vnsutil-destroy

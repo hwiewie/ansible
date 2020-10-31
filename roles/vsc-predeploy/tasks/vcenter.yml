@@ -1,0 +1,148 @@
+---
+- name: Set local variable with vmname
+  set_fact:
+    vm_name: "{{ vmname }}"
+
+- include_role:
+    name: check-node-running
+
+- name: Display if skipping VSC predeploy
+  debug:
+    msg:
+      - "****************************************************"
+      - "Skipping VSC predeploy because it is already present"
+      - "****************************************************"
+  when: node_present
+
+- block:
+
+  - name: Configure vCenter path
+    set_fact:
+      vcenter_path: "{{ target_server }}/{{ vcenter.datacenter }}/host/{{ vcenter.cluster }}\
+        {{ (vcenter.host_reference != 'NONE') | ternary ('/' + vcenter.host_reference | urlencode, '') }}\
+        {{ (vcenter.resource_pool != 'NONE') | ternary ('/Resources/' + vcenter.resource_pool | urlencode, '') }}"
+
+  - name: Configure ovftool command
+    set_fact:
+      ovftool_command: >-
+        {{ vcenter_global.ovftool }}
+        --acceptAllEulas
+        --noSSLVerify
+        --powerOn
+        {% if hostvars[inventory_hostname].ansible_verbosity > 0 %}
+        --X:logLevel=verbose
+        --X:logToConsole
+        {% else %}
+        --machineOutput
+        {% endif %}
+        -dm=thin
+        -ds={{ vcenter.datastore }}
+        {% if vcenter.vmfolder is defined %}
+        -vf={{ vcenter.vmfolder }}
+        {% endif %}
+        -n={{ vmname }}
+        --net:"Management Network={{ mgmt_bridge }}"
+        --net:"Datapath Network={{ data_bridge }}"
+        --prop:"DHCP=False"
+        --prop:"Management_IP={{ mgmt_ip }}/{{ mgmt_netmask_prefix }}"
+        {% if mgmt_static_route_list[0] is defined %}
+        --prop:"Static_Routes={% for sr in mgmt_static_route_list %}{{ sr }} {{ mgmt_gateway }}{% if not loop.last %};{% endif %}{% endfor %}"
+        {% else %}
+        --prop:"Static_Routes="
+        {% endif %}
+        --prop:"DNS_Server_1={{ dns_server_list[0] }}"
+        {% if dns_server_list[1] is defined %}
+        --prop:"DNS_Server_2={{ dns_server_list[1] }}"
+        {% else %}
+        --prop:"DNS_Server_2=0.0.0.0"
+        {% endif %}
+        {% if dns_server_list[2] is defined %}
+        --prop:"DNS_Server_3={{ dns_server_list[2] }}"
+        {% else %}
+        --prop:"DNS_Server_3=0.0.0.0"
+        {% endif %}
+        --prop:"DNS_Search_Domain={{ dns_domain }}"
+        --prop:"VSC_name={{ inventory_hostname }}"
+        --prop:"XMPP_Server={{ vsd_fqdn }}"
+        {% if ntp_server_list[0] is defined %}
+        --prop:"SNTP_Server={{ ntp_server_list[0] }}"
+        {% else %}
+        --prop:"SNTP_Server=0.0.0.0"
+        {% endif %}
+        {% if control_ip is defined and control_netmask_prefix is defined %}
+        --prop:"Datapath_IP={{ control_ip }}/{{ control_netmask_prefix }}"
+        {% else %}
+        --prop:"Datapath_IP=0.0.0.0/32"
+        {% endif %}
+        --prop:"Datapath_DFGW=0.0.0.0"
+        {% if system_ip is defined %}
+        --prop:"System_IP={{ system_ip }}"
+        {% else %}
+        --prop:"System_IP=0.0.0.0"
+        {% endif %}
+        --prop:"BGP_Peer_1=0.0.0.0"
+        --prop:"BGP_Peer_2=0.0.0.0"
+        --prop:"Autonomous_System=64000"
+        --prop:"BGP_Group=internal"
+        "{{ image_path }}/{{ image_file_name }}"
+
+  - name: Deploy VSC image on vCenter
+    include_role:
+      name: common
+      tasks_from: vcenter-deploy-image
+
+  - name: Finding VM folder
+    connection: local
+    vmware_guest_find:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      name: "{{ vmname }}"
+      validate_certs: no
+    register: vsc_vm_folder
+
+  - name: Gathering info on VM
+    connection: local
+    vmware_guest_info:
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      datacenter: "{{ vcenter.datacenter }}"
+      folder: "/{{ vcenter.datacenter }}{{ vsc_vm_folder['folders'][0] }}"
+      name: "{{ vmname }}"
+      validate_certs: no
+    register: vsc_vm_facts
+
+  - debug: var=vsc_vm_facts verbosity=1
+
+  - name: Set VM UUID
+    set_fact:
+      uuid: "{{ vsc_vm_facts.instance.hw_product_uuid }}"
+
+  - debug: var=uuid
+
+  - name: Turn on autostart
+    connection: local
+    vmware_autostart:
+      name: "{{ vm_name }}"
+      uuid: "{{ uuid }}"
+      hostname: "{{ target_server }}"
+      username: "{{ vcenter.username }}"
+      password: "{{ vcenter.password }}"
+      validate_certs: no
+      state: enable
+
+  - name: Verify VM is running
+    assert:
+      that: "vsc_vm_folder is succeeded and vsc_vm_facts is succeeded"
+      msg: "VSC VM {{ vmname }} is not created"
+
+  - name: Wait for VSC ssh to be ready
+    connection: local
+    wait_for:
+      port: "22"
+      host: "{{ mgmt_ip }}"
+      search_regex: OpenSSH
+      delay: 1
+
+  when: not node_present

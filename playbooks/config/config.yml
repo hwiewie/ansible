@@ -1,0 +1,6 @@
+- name: Calling Config Role
+  hosts: localhost
+  connection: local
+  roles:
+    - pre
+    - lenovo.lxca-config

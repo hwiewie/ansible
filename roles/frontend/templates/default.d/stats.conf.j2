@@ -1,0 +1,3 @@
+location /stats {
+    proxy_pass {{ frontend_nginx_stats_origin }};
+}

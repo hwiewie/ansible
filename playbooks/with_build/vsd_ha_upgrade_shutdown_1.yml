@@ -1,0 +1,13 @@
+---
+- hosts: vsd_upgrade_ha_node1
+  gather_facts: no
+  pre_tasks:
+    - name: Set vm name, upgrade and preserve vm flags
+      set_fact:
+        nuage_upgrade: true
+        preserve_vm: true
+        vm_name: "{{ vmname }}"
+
+  roles:
+    - vsd-services-stop
+    - vsd-destroy

@@ -1,0 +1,19 @@
+- hosts: nsgvs
+  gather_facts: no
+  pre_tasks:
+    - name: Lets run NSGV postdeploy hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+            - nsgv_postdeploy
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - nsgv-postdeploy
+  vars:
+    vsc_username: "{{ vsc_custom_username | default(vsc_default_username) }}"
+    vsc_password: "{{ vsc_custom_password | default(vsc_default_password) }}"

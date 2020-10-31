@@ -1,0 +1,111 @@
+- hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Set fact for backup type
+      set_fact:
+        backup_type: upgrade-vsd
+      when: backup_type is not defined
+
+- hosts: vsd_ha_node1,vsd_ha_node2,vsd_ha_node3
+  gather_facts: no
+  remote_user: "{{ vsd_custom_username | default(vsd_default_username) }}"
+  become: "{{ 'no' if vsd_custom_username | default(vsd_default_username) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ vsd_custom_password | default(vsd_default_password) }}"
+  tasks:
+    - name: Backup /etc/hosts files on VSD before upgrade
+      include_role:
+        name: vsd-backup-hostfile
+      when: backup_vsd_host_file | default(false)
+
+- hosts: vsd_ha_node1,vsd_ha_node2,vsd_ha_node3
+  gather_facts: no
+  serial: 1
+  remote_user: "{{ vsd_custom_username | default(vsd_default_username) }}"
+  become: "{{ 'no' if vsd_custom_username | default(vsd_default_username) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ vsd_custom_password | default(vsd_default_password) }}"
+  tasks:
+    - name: Find the vsd node to run backup
+      include_role:
+        name: common
+        tasks_from: vsd-find-backup-node
+
+- hosts: "{{ hostvars['localhost'].vsd_backup_node | default('vsd_ha_node1') }}"
+  gather_facts: no
+  pre_tasks:
+    - name: Fail if vsd_migration_iso_path is not defined
+      assert:
+       that: vsd_migration_iso_path != "MISSING"
+       msg: "vsd_migration_iso_path not defined. Please define it and try again."
+
+    - name: Fail if vsd_migration_iso_file_name is not defined
+      assert:
+       that: vsd_migration_iso_file_name != "MISSING"
+       msg: "vsd_migration_iso_file_name not defined. Please define it and try again."
+
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+
+    - name: Lets run VSD dbbackup hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsd_dbbackup
+          - vsd_ha_upgrade_database_backup_and_decouple
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsd-dbbackup
+
+- hosts: vsd_upgrade_ha_node1
+  gather_facts: no
+  vars:
+    report_filename: vsd_ha_upgrade_backup_and_decouple_report.txt
+  pre_tasks:
+    - name: Fail if vsd_migration_iso_path is not defined
+      assert:
+        that: vsd_migration_iso_path != "MISSING"
+        msg: "vsd_migration_iso_path not defined. Please define it and try again."
+
+    - name: Fail if vsd_migration_iso_file_name is not defined
+      assert:
+        that: vsd_migration_iso_file_name != "MISSING"
+        msg: "vsd_migration_iso_file_name not defined. Please define it and try again."
+
+    - name: Lets run VSD decouple hooks
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsd_decouple
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+  roles:
+    - vsd-decouple
+
+- hosts: vsd_upgrade_ha_node1
+  gather_facts: no
+  pre_tasks:
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+  vars:
+    report_filename: vsd_ha_node1_health_report_after_decouple
+    vsd_username: "{{ vsd_custom_username | default(vsd_default_username) }}"
+    vsd_password: "{{ vsd_custom_password | default(vsd_default_password) }}"
+  roles:
+    - vsd-health

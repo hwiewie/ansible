@@ -1,0 +1,47 @@
+---
+- hosts: vsd_upgrade_ha_node2:vsd_upgrade_ha_node3
+  gather_facts: no
+  pre_tasks:
+
+    - block:
+      - name: Set interfaces up for the predeployed VSD
+        include_role:
+          name: vsd-predeploy
+          tasks_from: vcenter-enable-interface
+
+      - name: End the play since predeploy is already executed
+        meta: end_play
+
+      when: vcenter_start_vsd_with_interfaces_disabled | default (False)
+
+    - name: Set upgrade flag
+      set_fact:
+        nuage_upgrade: true
+
+    - name: Check if prereq satisfied for upgrade
+      include_role:
+        name: common
+        tasks_from: check-upgrade-prereq
+
+    - name: Check if VSD prereq satisfied for predeploy
+      include_role:
+        name: common
+        tasks_from: check-predeploy-prereq
+      vars:
+        required_available_disk_space: "{{ vsd_fallocate_size_gb }}"
+        disk_space_path: "{{ images_path }}"
+
+    - name: Lets run VSD predeploy VSD 2 and VSD 3
+      include_role:
+        name: hooks
+        tasks_from: main
+      vars:
+        - hooks_file_path: "{{ hook }}"
+        - hook_location:
+          - vsd_ha_upgrade_predeploy_2_and_3
+      loop: "{{ hooks | default([]) }}"
+      loop_control:
+        loop_var: hook
+
+  roles:
+    - vsd-predeploy

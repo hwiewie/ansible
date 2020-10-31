@@ -1,0 +1,85 @@
+- block:
+  - name: Resolve standalone vsd to ip addr
+    shell: "getent hosts {{ groups['vsd_sa_node'][0] | default(vsd_hostname) }} | awk '{print $1}'"
+    register: ip_addr_sa
+    delegate_to: localhost
+    become: no
+
+  - name: Set Ip addr fact
+    set_fact:
+      ip_addr: "{{ ip_addr_sa }}"
+
+  - name: Get custom username for vsd
+    set_fact:
+      custom_username: "{{ hostvars[groups['vsd_sa_node'][0]].vsd_custom_username | default(vsd_custom_username) }}"
+      custom_password: "{{ hostvars[groups['vsd_sa_node'][0]].vsd_custom_password | default(vsd_custom_password) }}"
+    when:
+      - hostvars[groups['vsd_sa_node'][0]].vsd_custom_username is defined or vsd_custom_username is defined
+
+  when: groups['vsd_sa_node'] is defined
+
+- block:
+  - name: Resolve HA vsd node 1 to ip addr
+    shell: "getent hosts {{ groups['vsd_ha_node1'][0] | default(vsd_hostname) }} | awk '{print $1}'"
+    register: ip_addr_ha
+    delegate_to: localhost
+    become: no
+
+  - name: Set Ip addr fact
+    set_fact:
+      ip_addr: "{{ ip_addr_ha }}"
+
+  - name: Get custom username for vsd
+    set_fact:
+      custom_username: "{{ hostvars[groups['vsd_ha_node1'][0]].vsd_custom_username | default(vsd_custom_username) }}"
+      custom_password: "{{ hostvars[groups['vsd_ha_node1'][0]].vsd_custom_password | default(vsd_custom_password) }}"
+    when:
+      - hostvars[groups['vsd_ha_node1'][0]].vsd_custom_username is defined or vsd_custom_username is defined
+
+  when: groups['vsd_ha_node1'][0] is defined
+
+- name: Get VSD information
+  block:
+
+  - include_role:
+      name: common
+      tasks_from: get-vsd-version
+
+  - include_role:
+      name: common
+      tasks_from: get-vsd-build
+
+  - name: Get the vsd node info
+    command: /opt/vsd/sysmon/showStatus.py
+    environment:
+      VSD_VERSION: "{{ vsd_version.stdout }}"
+      VSD_BUILD: "{{ vsd_build.stdout }}"
+    register: vsd_info
+
+  remote_user: "{{ custom_username | default(vsd_default_username) }}"
+  become: "{{ 'no' if custom_username | default(vsd_default_username) == 'root' else 'yes' }}"
+  vars:
+    ansible_become_pass: "{{ custom_password | default(vsd_default_password) }}"
+  delegate_to: "{{ ip_addr.stdout.split('\n')[0] }}"
+
+- name: Set vsd deployment mode
+  set_fact:
+    vsd_sa_or_ha: "sa"
+  when: "'Standalone' in vsd_info.stdout"
+
+- name: Set vsd deployment mode
+  set_fact:
+    vsd_sa_or_ha: "ha"
+  when: "'Clustered' in vsd_info.stdout"
+  run_once: True
+
+- name: Extract vsd hostname when standalone
+  set_fact:
+    vsd_hostname_list: "{{ vsd_info.stdout | regex_findall('Host Name:\\s+(.*)') }}"
+  when: vsd_sa_or_ha is match('sa')
+
+- name: Extract vsd hostname when clustered
+  set_fact:
+    vsd_hostname_list: "{{ vsd_info.stdout | regex_findall('VSD Server Node:\\s+(.*)') }}"
+  when: vsd_sa_or_ha is match('ha')
+  run_once: True

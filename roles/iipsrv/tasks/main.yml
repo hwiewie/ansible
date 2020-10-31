@@ -1,0 +1,30 @@
+---
+  - name: Make sure iipsrv directory exists
+    file: path=/usr/lib/iipsrv state=directory
+    sudo: yes
+
+  - name: Clone development version
+    git: >
+      repo=https://github.com/ruven/iipsrv.git
+      dest=/usr/lib/iipsrv
+    sudo: yes
+
+  - name: Build iipsrv
+    command: chdir=/usr/lib/iipsrv {{ item }} creates=/usr/lib/iipsrv/src/iipsrv.fcgi
+    with_items:
+      - ./autogen.sh
+      - ./configure
+      - make
+    sudo: yes
+
+  - name: create iipsrv group
+    group: name=iipsrv
+    sudo: yes
+
+  - name: create iipsrv user
+    user: name=iipsrv group=iipsrv
+    sudo: yes
+
+  - name: Make sure iipsrv log dir exists
+    file: path=/var/log/iipsrv state=directory owner=iipsrv group=iipsrv recurse=yes
+    sudo: yes

@@ -1,0 +1,11 @@
+---
+
+- name: "Deleting development certs in {{ _service_dev_certs.path }}"
+  file:
+    path: "{{ _service_dev_certs.path }}/{{ _cert_file_name }}"
+    state: absent
+  loop: "{{ _service_dev_certs.files }}"
+  loop_control:
+    loop_var: _cert_file_name
+    label: "{{ _service_dev_certs.path }}/{{ _cert_file_name }}"
+

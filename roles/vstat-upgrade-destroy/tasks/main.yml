@@ -1,0 +1,6 @@
+---
+- name: Invoke vstat-destroy role on new VM
+  include_role:
+    name: vstat-destroy
+  vars:
+    vm_name: "{{ vmname }}"

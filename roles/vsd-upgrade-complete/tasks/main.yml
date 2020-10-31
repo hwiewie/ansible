@@ -1,0 +1,96 @@
+- name: Set major or minor upgrade flag
+  include_role:
+    name: common
+    tasks_from: set-major-minor-versions.yml
+
+- block:
+
+  - name: Restart Jboss
+    command: "monit restart jboss"
+    when:
+     - upgrade_major_or_minor == 'minor'
+     - not inplace_upgrade | default(false)
+     - inventory_hostname in groups['primary_vsds']
+
+  - block:
+
+    - include_role:
+        name: common
+        tasks_from: get-vsd-version
+
+    - include_role:
+        name: common
+        tasks_from: get-vsd-build
+
+    - block:
+
+      - name: Set VSD creds to default
+        set_fact:
+          vsd_user_cred: "{{ vsd_default_auth }}"
+
+      - name: Change credentials before upgrade complete flag
+        shell: "{{ change_credentials_command }}"
+        no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+      - name: Set upgrade complete flag
+        shell: "{{ upgrade_complete_flag_command }}"
+        register: result
+        until: result.rc == 0
+        retries: 40
+        delay: 30
+
+      - name: Set VSD creds to default
+        set_fact:
+          vsd_user_cred: "{{ vsd_auth.password }}"
+
+      - name: Change credentials before upgrade complete flag
+        shell: "{{ change_credentials_command }}"
+        no_log: "{{ lookup('env', 'METROAE_NO_LOG') or 'true' }}"
+
+      when:
+        - inventory_hostname == groups['primary_vsds'][0]
+        - vsd_auth.password | default(vsd_default_auth) != vsd_default_auth
+
+    - block:
+
+      - name: Set upgrade complete flag
+        shell: "{{ upgrade_complete_flag_command }}"
+        register: upgrade_complete
+        until: upgrade_complete.rc == 0
+        retries: 40
+        delay: 30
+        ignore_errors: yes
+
+      - name:
+        assert:
+          that: "upgrade_complete.rc == 0"
+          msg: >-
+            The upgrade complete flag could not be set.
+            This could happen due to incorrect csproot credentials.
+            The correct set of credentials can be provided using vsd_auth_username and
+            vsd_auth_password in the credentials.yml file.
+
+      when:
+        - inventory_hostname == groups['primary_vsds'][0]
+        - vsd_auth.password | default(vsd_default_auth) == vsd_default_auth
+
+    - import_tasks: check_monit_status.yml
+
+    - name: Turn on API on vsd's for major upgrade
+      shell: "{{ turn_on_api_command }}"
+      when: upgrade_major_or_minor == 'major'
+
+    - import_tasks: check_monit_status.yml
+
+    when: not inplace_upgrade | default(false)
+
+  remote_user: "{{ vsd_default_username }}"
+
+- name: Renew VSD certificates
+  include_role:
+    name: common
+    tasks_from: renew-vsd-certificates.yml
+  when:
+    - not deploy_vcin | default(false)
+    - not inplace_upgrade | default(false)
+  run_once: True

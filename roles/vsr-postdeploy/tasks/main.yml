@@ -1,0 +1,51 @@
+- name: Clean known_hosts of VSRs (ignoring errors)
+  known_hosts:
+    name: "{{ mgmt_ip }}"
+    state: absent
+  delegate_to: localhost
+  no_log: True
+  ignore_errors: True
+
+- name: Copy Python python scripts
+  import_tasks: "copy_python_scripts.yml"
+
+- name: Create rollback point
+  sros_config:
+    lines:
+      - "admin rollback save comment \"Before Metro-DCGW Integration {{ lookup('pipe', 'date -u +%Y-%m-%d-%H:%M:%s') }}\""
+    provider: "{{ provider_creds }}"
+  delegate_to: localhost
+
+- block:
+  - name: "Check if directory {{ config_file_directory }}/{{ inventory_hostname }} exists"
+    stat:
+      path: "{{ config_file_directory }}/{{ inventory_hostname }}"
+    register: builddir
+    delegate_to: localhost
+
+  - name: Generate configuration fragments
+    template:
+      src: "{{ item.file }}.j2"
+      dest: "{{ config_file_directory }}/{{ inventory_hostname }}/{{ item.prio }}-{{ item.file }}"
+    with_items:
+      - { file: "vsd_integration.cfg", prio: "80" }
+    when: builddir.stat.exists
+    delegate_to: localhost
+
+  when: config_file_directory is defined
+
+- name: Show rootified commands that will be sent to VSR
+  debug: msg='{{ lookup("template", "vsd_integration.cfg.j2" ) | sros_rootify }}' verbosity=1
+
+
+- name: Configure additional configuration to integrate VSR with Nuage VSD
+  sros_config:
+    lines: '{{ lookup("template", "vsd_integration.cfg.j2" ) | sros_rootify }}'
+    provider: "{{ provider_creds }}"
+  delegate_to: localhost
+
+- name: Save VSR config
+  sros_config:
+    save: yes
+    provider: "{{ provider_creds }}"
+  delegate_to: localhost

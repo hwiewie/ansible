@@ -1,0 +1,24 @@
+---
+  - name: install epel
+    yum: name=epel-release state=latest
+    sudo: yes
+
+  - name: install packages
+    yum: name={{ item }} update_cache=yes
+    with_items:
+      - gcc
+      - gcc-c++
+      - git
+      - autoconf
+      - automake
+      - libtool
+      - fcgi
+      - spawn-fcgi
+      - zlib-devel
+      - libjpeg-devel
+      - freetype-devel
+      - libtiff-devel  
+      - libmemcached-devel
+      - nginx
+      - supervisor
+    sudo: yes
