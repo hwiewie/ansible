@@ -33,3 +33,5 @@ git@github.com:dev-sec/ansible-os-hardening.git
 
 git@github.com:splunk/splunk-ansible.git
 
+git@github.com:gchq/stroom-ansible.git
+
