@@ -29,3 +29,7 @@ git@github.com:senaite/senaite.ansible-playbook.git
 
 git@github.com:openzfs/openzfs-ci.git
 
+git@github.com:dev-sec/ansible-os-hardening.git
+
+git@github.com:splunk/splunk-ansible.git
+
