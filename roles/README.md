@@ -29,3 +29,24 @@ Change the entry in `roles.yml` to point to your repository instead:
     - src: https://github.com/bennojoy/nginx
       version: master
       name: nginx_role
+
+## file structure
+
+    .
+└── example_role
+    ├── README.md     # 說明文件
+    ├── defaults
+    │   └── main.yml  # 可被覆寫的變數。
+    ├── files         # 需複製到 Managed node 的檔案。
+    ├── handlers
+    │   └── main.yml  # 主要的 handler。
+    ├── meta
+    │   └── main.yml
+    ├── tasks
+    │   └── main.yml  # 主要的 task。
+    ├── templates     # 集中存放 Jinja2 模板的目錄。
+    ├── tests
+    │   ├── inventory
+    │   └── test.yml
+    └── vars
+        └── main.yml  # 不該被覆寫的變數。
