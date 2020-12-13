@@ -8,6 +8,37 @@ git pull origin master
 
 git push -u origin master
 
+production        # inventory file for production.
+staging           # inventory file for staging.
+
+group_vars/
+   group1         # here we assign variables to particular groups
+   group2
+host_vars/
+   hostname1      # if systems need specific variables, put them here
+   hostname2
+
+site.yml          # master playbook
+webservers.yml    # playbook for webserver tier
+dbservers.yml     # playbook for dbserver tier
+
+roles/
+  common/         # role name
+    tasks/        #   
+      main.yml    # main tasks file.
+    handlers/     #
+      main.yml    # handlers file.
+    templates/    #
+      ntp.conf.j2 # templates end in .j2.
+    files/        #   
+      bar.txt     # files
+      foo.sh      # script files
+    vars/         #
+      main.yml    # variables with this role.
+    defaults/     #
+      main.yml    # default variables.
+    meta/         #
+      main.yml    # role dependencies
 
 git@github.com:hwiewie/ansible.git
 
