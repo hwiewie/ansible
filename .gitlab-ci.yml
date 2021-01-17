@@ -1,0 +1,93 @@
+stages:
+  - Virtualbox Deploy
+  - Libvirt Deploy
+  - OpenStack Deploy
+
+before_script:
+  - 'sudo rm -rf ~/VirtualBox\ VMs/*'
+  - 'sudo rm -rf /tmp/ssl'
+
+# virtualbox template
+.vbox_template: &vbox_template
+  stage: Virtualbox Deploy
+  script:
+    - './tools/setup -m ${MEMORY} -i ${IFACE} -n ${CNI_PLUGIN} -w ${WORKER} -b ${MASTER} -o ${OS} -f true'
+    - './tools/reset'
+  only: [/^pr-.*$/]
+  tags:
+    - shell
+    - vagrant
+
+# openstack template
+.os_template: &os_template
+  stage: OpenStack Deploy
+  when: manual
+  script:
+    - 'cp ${INVENTORY_PATH} ./'
+    - export MASTER_IP=$(ip route get 8.8.8.8 | awk '{print $NF; exit}')
+    - 'perl -i -pe "s/172.16.35.9/${MASTER_IP}/g" ${GROUP_VARS_PATH}'
+    - 'perl -i -pe "s/cni_iface:.*/cni_iface: ${CNI_IFACE}/g" ${GROUP_VARS_PATH}'
+    - 'perl -i -pe "s/network:.*/network: ${CNI_PLUGIN}/g" ${GROUP_VARS_PATH}'
+    - 'perl -i -pe "s/keepalived:.*/keepalived: false/g" ${GROUP_VARS_PATH}'
+    - ansible-playbook reset.yml
+    - ansible-playbook cluster.yml
+    - ansible-playbook addons.yml
+    - mkdir -p ~/.kube/
+    - sudo cp /etc/kubernetes/admin.conf ~/.kube/config
+    - sudo chmod 775 ~/.kube/config
+    - kubectl get node
+    - kubectl -n kube-system get po
+    - kubectl -n kube-system get svc
+  only: [/^pr-.*$/]
+
+vagrant-ubuntu-calico:
+  variables:
+    OS: ubuntu16
+    CNI_PLUGIN: calico
+    MEMORY: 2048
+    MASTER: 1
+    WORKER: 2
+    IFACE: eth1
+  <<: *vbox_template
+
+vagrant-centos-calico:
+  variables:
+    OS: centos7
+    CNI_PLUGIN: calico
+    MEMORY: 2048
+    MASTER: 1
+    WORKER: 2
+    IFACE: enp0s8
+  <<: *vbox_template
+
+# deploy openstack
+openstack-ubuntu-flannel:
+  before_script:
+    - sudo apt-get update && sudo apt-get install -y software-properties-common git
+    - sudo apt-add-repository -y ppa:ansible/ansible
+    - sudo apt-get update && sudo apt-get install -y ansible
+  variables:
+    GROUP_VARS_PATH: "./group_vars/all.yml"
+    INVENTORY_PATH: "/home/gitlab-runner/inventory"
+    CNI_IFACE: "ens3"
+    CNI_PLUGIN: "flannel"
+  <<: *os_template
+  tags:
+    - shell
+    - ubuntu
+    - openstack
+
+openstack-centos-flannel:
+  before_script:
+    - sudo yum install -y epel-release git
+    - sudo yum install -y ansible
+  variables:
+    GROUP_VARS_PATH: "./group_vars/all.yml"
+    INVENTORY_PATH: "/home/gitlab-runner/inventory"
+    CNI_IFACE: "eth0"
+    CNI_PLUGIN: "flannel"
+  <<: *os_template
+  tags:
+    - shell
+    - centos
+    - openstack

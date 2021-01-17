@@ -72,3 +72,5 @@ git@github.com:splunk/splunk-ansible.git
 
 git@github.com:easzlab/kubeasz.git
 
+git@github.com:kairen/kube-ansible.git
+

@@ -12,3 +12,14 @@ install:
 script:
   - export PYTHONPATH=$PWD:/usr/local/lib/python2.7/dist-packages:/usr/local/lib/python3.5/dist-packages
   - python -m pytest
+  - yamllint roles
+  - ansible-playbook -i inventory/local-tests.ini cluster.yml -vvv --syntax-check
+  - ansible-playbook -i inventory/local-tests.ini upgrade-cluster.yml -vvv --syntax-check
+  - ansible-playbook -i inventory/local-tests.ini addons.yml -vvv --syntax-check
+  - ansible-playbook -i inventory/local-tests.ini reset-cluster.yml -vvv --syntax-check
+os: linux
+sudo: required
+services:
+  - docker
+before_install:
+  - pip install -U yamllint ansible
