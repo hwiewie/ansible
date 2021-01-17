@@ -70,3 +70,5 @@ git@github.com:flathub/ansible-playbook.git
 
 git@github.com:splunk/splunk-ansible.git
 
+git@github.com:easzlab/kubeasz.git
+
