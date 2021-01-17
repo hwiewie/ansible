@@ -75,3 +75,4 @@ git@github.com:easzlab/kubeasz.git
 
 git@github.com:kairen/kube-ansible.git
 
+git@github.com:Tobewont/ansible-playbook.git
