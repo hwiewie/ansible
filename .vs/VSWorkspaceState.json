@@ -1,0 +1,18 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\playbooks",
+    "\\playbooks\\roles",
+    "\\playbooks\\roles\\datadog",
+    "\\playbooks\\roles\\datadog\\defaults",
+    "\\playbooks\\roles\\datadog\\handlers",
+    "\\playbooks\\roles\\datadog\\meta",
+    "\\playbooks\\roles\\datadog\\tasks",
+    "\\playbooks\\roles\\mongo_3_6\\files\\etc",
+    "\\playbooks\\roles\\mongo_3_6\\files\\etc\\systemd",
+    "\\playbooks\\roles\\mongo_3_6\\files\\etc\\systemd\\system",
+    "\\playbooks\\roles\\mongo_3_6\\tasks"
+  ],
+  "SelectedNode": "\\playbooks\\roles\\datadog\\defaults\\main.yml",
+  "PreviewInSolutionExplorer": false
+}
