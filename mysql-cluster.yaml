@@ -1,0 +1,11 @@
+- hosts: mysql_cluster_mgm
+  roles:
+  - mysql-cluster-mgm
+
+- hosts: mysql_cluster_data
+  roles:
+  - mysql-cluster-data
+
+- hosts: mysql_cluster_sql
+  roles:
+  - mysql-cluster-sql

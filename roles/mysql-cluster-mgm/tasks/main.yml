@@ -1,0 +1,16 @@
+- name: Download binaries
+  command: wget --continue -P /var/tmp http://dev.mysql.com/get/Downloads/MySQL-Cluster-7.3/mysql-cluster-gpl-7.3.4-linux-glibc2.5-x86_64.tar.gz
+- name: Extract binaries
+  command: tar -C /var/tmp -xzf /var/tmp/mysql-cluster-gpl-7.3.4-linux-glibc2.5-x86_64.tar.gz creates=/var/tmp/mysql-cluster-gpl-7.3.4-linux-glibc2.5-x86_64/
+- name: Install nbd binaries
+  command: install ndb_mgmd ndb_mgm /usr/local/bin/ chdir=/var/tmp/mysql-cluster-gpl-7.3.4-linux-glibc2.5-x86_64/bin/ creates=/usr/local/bin/ndb_mgmd
+- name: Install init file
+  copy: src=ndb_mgmd.init dest=/etc/init.d/ndb_mgmd
+- name: Activate init file
+  service: name=ndb_mgmd enabled=yes
+- name: Create data dir
+  command: mkdir /var/lib/mysql-cluster creates=/var/lib/mysql-cluster
+- name: Copy config
+  template: src=config.ini dest=/var/lib/mysql-cluster/config.ini
+- name: Initialize ndb_mgmd
+  command: ndb_mgmd -f /var/lib/mysql-cluster/config.ini --initial --config-dir=/var/lib/mysql-cluster/ creates=/var/lib/mysql-cluster/ndb_1_cluster.log
