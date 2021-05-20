@@ -1,7 +1,13 @@
 {
   "ExpandedNodes": [
-    ""
+    "",
+    "\\contrib\\heat",
+    "\\docker\\jenkins-master",
+    "\\jenkins\\sh\\ansible-deploy-roles",
+    "\\roles",
+    "\\roles\\k8s-setup",
+    "\\roles\\k8s-setup\\defaults"
   ],
-  "SelectedNode": "\\.travis.yml",
+  "SelectedNode": "\\roles\\k8s-setup\\defaults\\main.yml",
   "PreviewInSolutionExplorer": false
 }
