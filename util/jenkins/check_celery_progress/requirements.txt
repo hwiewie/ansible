@@ -12,7 +12,7 @@ billiard==3.3.0.23        # via celery
 boto3==1.5.4              # via -r requirements/celery_progress.in
 botocore==1.8.36          # via awscli, boto3, s3transfer
 celery==3.1.25            # via -r requirements/celery_progress.in
-certifi==2020.6.20        # via opsgenie-sdk, requests
+certifi==2022.12.7        # via opsgenie-sdk, requests
 chardet==3.0.4            # via requests
 click==6.7                # via -r requirements/celery_progress.in
 colorama==0.3.7           # via awscli
